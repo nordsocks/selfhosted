@@ -1,0 +1,224 @@
+import { Router, type IRouter } from "express";
+import { db, shProxiesTable } from "../db";
+import { eq, and } from "drizzle-orm";
+import { authenticate } from "../middlewares/auth";
+import { encrypt, decrypt } from "../lib/crypto";
+import { getCountryByCode } from "../lib/countries";
+import {
+  createAndStartContainer, stopAndRemoveContainer, restartContainer,
+  getContainerStatus, getContainerLogs, allocatePort, getPublicIp,
+} from "../lib/docker";
+
+const router: IRouter = Router();
+
+function formatProxy(p: typeof shProxiesTable.$inferSelect) {
+  return {
+    id: String(p.id),
+    name: p.name,
+    country: p.country,
+    countryName: p.countryName,
+    city: p.city ?? null,
+    externalPort: p.externalPort,
+    status: p.status,
+    containerId: p.containerId ?? null,
+    publicIp: p.publicIp ?? null,
+    rotationInterval: p.rotationInterval ?? 0,
+    rotationNextAt: p.rotationNextAt?.toISOString() ?? null,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+    lastCountryChangeAt: p.lastCountryChangeAt?.toISOString() ?? null,
+  };
+}
+
+router.get("/proxies", authenticate, async (req, res): Promise<void> => {
+  const proxies = await db.select().from(shProxiesTable).where(eq(shProxiesTable.userId, req.user!.userId));
+  res.json(proxies.map(formatProxy));
+});
+
+router.post("/proxies", authenticate, async (req, res): Promise<void> => {
+  const { name, nordUser, nordPass, country, city } = req.body as {
+    name: string; nordUser: string; nordPass: string; country: string; city?: string;
+  };
+
+  if (!name || !nordUser || !nordPass || !country) {
+    res.status(400).json({ error: "Validation error", message: "Missing required fields" });
+    return;
+  }
+  const countryInfo = getCountryByCode(country);
+  if (!countryInfo) {
+    res.status(400).json({ error: "Validation error", message: "Invalid country code" });
+    return;
+  }
+  const existing = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.userId, req.user!.userId), eq(shProxiesTable.name, name))
+  );
+  if (existing.length > 0) {
+    res.status(400).json({ error: "Conflict", message: "A proxy with this name already exists" });
+    return;
+  }
+  const userProxies = await db.select().from(shProxiesTable).where(eq(shProxiesTable.userId, req.user!.userId));
+  const activeProxies = userProxies.filter(p => p.status !== "stopped" && p.status !== "error");
+  if (activeProxies.length >= 10) {
+    res.status(429).json({ error: "Limit reached", message: "Maximum 10 simultaneous connections per NordVPN account." });
+    return;
+  }
+  const allProxies = await db.select().from(shProxiesTable);
+  const usedPorts = allProxies.map(p => p.externalPort);
+  const externalPort = await allocatePort(usedPorts);
+  const publicIp = await getPublicIp();
+  const nordUserEncrypted = encrypt(nordUser);
+  const nordPassEncrypted = encrypt(nordPass);
+  const [proxy] = await db.insert(shProxiesTable).values({
+    userId: req.user!.userId, name, country: country.toLowerCase(),
+    countryName: countryInfo.name, city: city ?? null,
+    externalPort, status: "starting", publicIp, nordUserEncrypted, nordPassEncrypted,
+  }).returning();
+
+  try {
+    const containerId = await createAndStartContainer({
+      name: `${req.user!.userId}_${proxy.id}`, nordUser, nordPass,
+      country: country.toLowerCase(), city: city ?? null, externalPort,
+    });
+    const [updated] = await db.update(shProxiesTable)
+      .set({ containerId, status: "starting" })
+      .where(eq(shProxiesTable.id, proxy.id))
+      .returning();
+    res.status(201).json(formatProxy(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to start Docker container");
+    await db.update(shProxiesTable).set({ status: "error" }).where(eq(shProxiesTable.id, proxy.id));
+    const [updated] = await db.select().from(shProxiesTable).where(eq(shProxiesTable.id, proxy.id));
+    res.status(201).json(formatProxy(updated));
+  }
+});
+
+router.get("/proxies/:id/status", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  if (!proxy.containerId) { res.json({ status: proxy.status }); return; }
+  const liveStatus = await getContainerStatus(proxy.containerId);
+  await db.update(shProxiesTable).set({ status: liveStatus, updatedAt: new Date() }).where(eq(shProxiesTable.id, id));
+  res.json({ status: liveStatus });
+});
+
+router.post("/proxies/:id/restart", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  if (!proxy.containerId) { res.status(400).json({ error: "Container not running" }); return; }
+  try {
+    await restartContainer(proxy.containerId);
+    const [updated] = await db.update(shProxiesTable)
+      .set({ status: "starting", updatedAt: new Date() })
+      .where(eq(shProxiesTable.id, id))
+      .returning();
+    res.json(formatProxy(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to restart container");
+    res.status(500).json({ error: "Failed to restart" });
+  }
+});
+
+router.post("/proxies/:id/stop", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  if (proxy.containerId) {
+    await stopAndRemoveContainer(proxy.containerId).catch(() => {});
+  }
+  const [updated] = await db.update(shProxiesTable)
+    .set({ status: "stopped", containerId: null, updatedAt: new Date() })
+    .where(eq(shProxiesTable.id, id))
+    .returning();
+  res.json(formatProxy(updated));
+});
+
+router.delete("/proxies/:id", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  if (proxy.containerId) await stopAndRemoveContainer(proxy.containerId).catch(() => {});
+  await db.delete(shProxiesTable).where(eq(shProxiesTable.id, id));
+  res.json({ success: true });
+});
+
+router.patch("/proxies/:id/rotation", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const { rotationInterval } = req.body as { rotationInterval: number };
+  if (typeof rotationInterval !== "number" || rotationInterval < 0) {
+    res.status(400).json({ error: "Validation error", message: "rotationInterval must be non-negative" });
+    return;
+  }
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  const rotationNextAt = rotationInterval > 0 ? new Date(Date.now() + rotationInterval * 60_000) : null;
+  const [updated] = await db.update(shProxiesTable)
+    .set({ rotationInterval, rotationNextAt })
+    .where(eq(shProxiesTable.id, id))
+    .returning();
+  res.json(formatProxy(updated));
+});
+
+router.get("/proxies/:id/connection", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  const nordUser = decrypt(proxy.nordUserEncrypted);
+  const nordPass = decrypt(proxy.nordPassEncrypted);
+  const ip = proxy.publicIp ?? "0.0.0.0";
+  const port = proxy.externalPort;
+  res.json({ proxyString: `socks5://${nordUser}:${nordPass}@${ip}:${port}`, ip, port, nordUser });
+});
+
+router.get("/proxies/:id/logs", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  const logs = proxy.containerId ? await getContainerLogs(proxy.containerId) : "Container is not running.";
+  res.json({ logs, proxyId: String(id) });
+});
+
+router.patch("/proxies/:id/country", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const { country, city } = req.body as { country: string; city?: string };
+  const countryInfo = getCountryByCode(country);
+  if (!countryInfo) { res.status(400).json({ error: "Invalid country code" }); return; }
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  if (proxy.containerId) await stopAndRemoveContainer(proxy.containerId).catch(() => {});
+  const nordUser = decrypt(proxy.nordUserEncrypted);
+  const nordPass = decrypt(proxy.nordPassEncrypted);
+  try {
+    const containerId = await createAndStartContainer({
+      name: `${req.user!.userId}_${proxy.id}`, nordUser, nordPass,
+      country: country.toLowerCase(), city: city ?? null, externalPort: proxy.externalPort,
+    });
+    const [updated] = await db.update(shProxiesTable)
+      .set({ country: country.toLowerCase(), countryName: countryInfo.name, city: city ?? null, containerId, status: "starting", lastCountryChangeAt: new Date(), updatedAt: new Date() })
+      .where(eq(shProxiesTable.id, id))
+      .returning();
+    res.json(formatProxy(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to change country");
+    res.status(500).json({ error: "Failed to change country" });
+  }
+});
+
+export default router;
