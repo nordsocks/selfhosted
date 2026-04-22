@@ -3,49 +3,15 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+const basePath = process.env.BASE_PATH || "/";
 const rawPort = process.env.PORT;
+const port = rawPort ? Number(rawPort) : 3000;
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+const apiProxyPath = basePath === "/" ? "/api" : `${basePath}api`;
 
 export default defineConfig({
   base: basePath,
   plugins: [
-    {
-      name: "selfhosted-base-redirect",
-      configureServer(server) {
-        server.middlewares.use((req, res, next) => {
-          const url = req.url ?? "/";
-          if (url.startsWith("/@") || url.startsWith("/__") || url.startsWith("/node_modules")) {
-            next();
-            return;
-          }
-          if (!url.startsWith(basePath)) {
-            res.writeHead(302, { Location: basePath });
-            res.end();
-            return;
-          }
-          next();
-        });
-      },
-    },
     react(),
     tailwindcss(),
   ],
@@ -57,22 +23,19 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
   },
   server: {
     port,
-    strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
-    fs: {
-      strict: true,
-    },
     proxy: {
-      [`${basePath}api`]: {
+      [apiProxyPath]: {
         target: "http://localhost:8083",
         changeOrigin: true,
-        rewrite: (path) => path.replace(new RegExp(`^${basePath.replace(/\/$/, "")}`), ""),
+        rewrite: (p) =>
+          basePath === "/" ? p : p.replace(new RegExp(`^${basePath.replace(/\/$/, "")}`), ""),
       },
     },
   },
