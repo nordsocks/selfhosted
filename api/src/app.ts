@@ -27,7 +27,7 @@ const panelDist = process.env["PANEL_DIST"]
 
 if (existsSync(panelDist)) {
   app.use(express.static(panelDist));
-  app.get("*", (_req, res) => {
+  app.get(/.*/, (_req, res) => {
     res.sendFile(path.join(panelDist, "index.html"));
   });
 }
