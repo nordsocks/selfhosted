@@ -41,7 +41,7 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
   const containerName = `sh_nordvpn_${config.name.replace(/[^a-z0-9_-]/gi, "_")}_${config.externalPort}`;
 
   const env: string[] = [
-    `NORDVPN_USER=${config.nordUser}`,
+    `NORDVPN_LOGIN=${config.nordUser}`,
     `NORDVPN_PASS=${config.nordPass}`,
     `NORDVPN_COUNTRY=${config.country.toUpperCase()}`,
     `SOCKS5_PORT=${SOCKS5_INTERNAL_PORT}`,
