@@ -149,6 +149,18 @@ export async function getContainerLogs(containerId: string): Promise<string> {
   }
 }
 
+export async function initSnatRules(): Promise<void> {
+  const gateway = "172.17.0.1";
+  try {
+    await execAsync(
+      `iptables -t nat -C POSTROUTING -o docker0 -p tcp --dport ${SOCKS5_INTERNAL_PORT} -j SNAT --to-source ${gateway} 2>/dev/null || iptables -t nat -I POSTROUTING -o docker0 -p tcp --dport ${SOCKS5_INTERNAL_PORT} -j SNAT --to-source ${gateway}`
+    );
+    logger.info("SNAT rule for Docker SOCKS5 applied");
+  } catch (err) {
+    logger.warn({ err }, "Failed to apply SNAT rule (may need root)");
+  }
+}
+
 export async function allocatePort(usedPorts: number[]): Promise<number> {
   const MIN_PORT = 12000;
   const MAX_PORT = 62000;
