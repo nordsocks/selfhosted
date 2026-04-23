@@ -18,36 +18,41 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-md border-b border-border">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2 font-bold text-base select-none">
-              <Server className="h-5 w-5" />
-              NordSOCKS Self-Hosted
-            </Link>
-            {user && (
-              <nav className="flex items-center space-x-1">
-                <Link href="/dashboard">
-                  <Button variant={location === "/dashboard" ? "secondary" : "ghost"} size="sm" className="gap-2">
-                    <LayoutDashboard className="h-4 w-4" />
-                    {t("nav_dashboard")}
-                  </Button>
-                </Link>
-                <Link href="/proxies/new">
-                  <Button variant={location === "/proxies/new" ? "secondary" : "ghost"} size="sm" className="gap-2">
-                    <PlusCircle className="h-4 w-4" />
-                    {t("nav_new_proxy")}
-                  </Button>
-                </Link>
-                <Link href="/account">
-                  <Button variant={location === "/account" ? "secondary" : "ghost"} size="sm" className="gap-2">
-                    <UserCircle className="h-4 w-4" />
-                    {t("acc_title")}
-                  </Button>
-                </Link>
-              </nav>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
+
+          {/* Logo */}
+          <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2 font-bold text-sm sm:text-base select-none shrink-0">
+            <Server className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="hidden xs:inline sm:inline">NordSOCKS</span>
+            <span className="hidden sm:inline text-muted-foreground font-normal">Self-Hosted</span>
+          </Link>
+
+          {/* Nav links — icon-only on mobile, icon+text on desktop */}
+          {user && (
+            <nav className="flex items-center gap-0.5 sm:gap-1">
+              <Link href="/dashboard">
+                <Button variant={location === "/dashboard" ? "secondary" : "ghost"} size="sm" className="gap-1.5 px-2 sm:px-3">
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t("nav_dashboard")}</span>
+                </Button>
+              </Link>
+              <Link href="/proxies/new">
+                <Button variant={location === "/proxies/new" ? "secondary" : "ghost"} size="sm" className="gap-1.5 px-2 sm:px-3">
+                  <PlusCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t("nav_new_proxy")}</span>
+                </Button>
+              </Link>
+              <Link href="/account">
+                <Button variant={location === "/account" ? "secondary" : "ghost"} size="sm" className="gap-1.5 px-2 sm:px-3">
+                  <UserCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t("acc_title")}</span>
+                </Button>
+              </Link>
+            </nav>
+          )}
+
+          {/* Right side: lang + logout */}
+          <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             <LangSelector variant="nav" />
             {user ? (
               <button
@@ -77,7 +82,7 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
 
       <main className="flex-1">
         {noPadding ? children : (
-          <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
             {children}
           </div>
         )}
