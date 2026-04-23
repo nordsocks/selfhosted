@@ -1,4 +1,4 @@
-import { useGetProxies, PROXIES_QUERY_KEY, useStartProxy, useStopProxy, useRestartProxy, useDeleteProxy, useGetConnectionString, useGetCountries, useChangeCountry, useGetProxyLogs, useSetRotation, useUpdateCredentials, useSetAllowedIps, type Proxy } from "@/hooks/use-proxies";
+import { useGetProxies, PROXIES_QUERY_KEY, useStartProxy, useStopProxy, useRestartProxy, useDeleteProxy, useGetConnectionString, useGetCountries, useChangeCountry, useGetProxyLogs, useSetRotation, useSetSocks5Credentials, useSetAllowedIps, type Proxy } from "@/hooks/use-proxies";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -197,7 +197,7 @@ export function Dashboard() {
           <ChangeCountryModal open={showChangeCountry} onOpenChange={setShowChangeCountry} proxy={activeProxy} />
           <ProxyLogsModal open={showLogs} onOpenChange={setShowLogs} proxyId={activeProxy.id} proxyName={activeProxy.name} />
           <RotationModal open={showRotation} onOpenChange={setShowRotation} proxy={activeProxy} />
-          <ChangeCredentialsModal open={showChangeCredentials} onOpenChange={setShowChangeCredentials} proxy={activeProxy} />
+          <Socks5CredentialsModal open={showChangeCredentials} onOpenChange={setShowChangeCredentials} proxy={activeProxy} />
           <IpWhitelistModal open={showIpWhitelist} onOpenChange={setShowIpWhitelist} proxy={activeProxy} />
         </>
       )}
@@ -290,10 +290,16 @@ function ConnectionStringModal({ open, onOpenChange, proxyId, proxyName }: { ope
               <CopyField label={t("conn_ip")} value={data.ip} />
               <CopyField label={t("conn_port")} value={String(data.port)} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <CopyField label={t("conn_user")} value={data.nordUser} />
-              <CopyField label={t("conn_pass")} value={data.nordPass ?? ""} secret />
-            </div>
+            {data.authMode === "credentials" && data.socks5User && data.socks5Pass ? (
+              <div className="grid grid-cols-2 gap-2">
+                <CopyField label={t("conn_user")} value={data.socks5User} />
+                <CopyField label={t("conn_pass")} value={data.socks5Pass} secret />
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-600">
+                Авторизация не требуется — доступ по IP-адресу
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-destructive text-sm p-4 bg-destructive/10 rounded-md border border-destructive/20">{t("conn_fail")}</div>
@@ -471,19 +477,29 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
   );
 }
 
-function ChangeCredentialsModal({ open, onOpenChange, proxy }: { open: boolean; onOpenChange: (o: boolean) => void; proxy: Proxy }) {
-  const updateCredentials = useUpdateCredentials();
+function Socks5CredentialsModal({ open, onOpenChange, proxy }: { open: boolean; onOpenChange: (o: boolean) => void; proxy: Proxy }) {
+  const setSocks5Credentials = useSetSocks5Credentials();
   const { toast } = useToast();
-  const [nordUser, setNordUser] = useState("");
-  const [nordPass, setNordPass] = useState("");
+  const [socks5User, setSocks5User] = useState("");
+  const [socks5Pass, setSocks5Pass] = useState("");
   const [showPass, setShowPass] = useState(false);
 
   const onSave = async () => {
-    if (!nordUser.trim() || !nordPass.trim()) return;
+    if (!socks5User.trim() || !socks5Pass.trim()) return;
     try {
-      await updateCredentials.mutateAsync({ id: proxy.id, data: { nordUser: nordUser.trim(), nordPass: nordPass.trim() } });
-      toast({ title: "Учётные данные обновлены, прокси перезапускается" });
-      setNordUser(""); setNordPass("");
+      await setSocks5Credentials.mutateAsync({ id: proxy.id, socks5User: socks5User.trim(), socks5Pass: socks5Pass.trim() });
+      toast({ title: "Логин/пароль прокси обновлён, прокси перезапускается" });
+      setSocks5User(""); setSocks5Pass("");
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const onRemove = async () => {
+    try {
+      await setSocks5Credentials.mutateAsync({ id: proxy.id, socks5User: null, socks5Pass: null });
+      toast({ title: "Авторизация отключена — прокси без логина/пароля" });
       onOpenChange(false);
     } catch (err: any) {
       toast({ title: "Ошибка", description: err.message, variant: "destructive" });
@@ -496,23 +512,25 @@ function ChangeCredentialsModal({ open, onOpenChange, proxy }: { open: boolean; 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCog className="h-5 w-5 text-violet-500" />
-            Сменить учётные данные — {proxy.name}
+            Логин/пароль прокси — {proxy.name}
           </DialogTitle>
-          <DialogDescription>Новые сервисные учётные данные NordVPN. Прокси будет перезапущен.</DialogDescription>
+          <DialogDescription>
+            Логин и пароль для подключения к SOCKS5 прокси. Не путайте с NordVPN учётными данными.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Сервисный логин NordVPN</label>
-            <Input value={nordUser} onChange={e => setNordUser(e.target.value)} placeholder="Логин из Manual Setup" />
+            <label className="text-sm font-medium">Логин</label>
+            <Input value={socks5User} onChange={e => setSocks5User(e.target.value)} placeholder="Произвольный логин" />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Сервисный пароль NordVPN</label>
+            <label className="text-sm font-medium">Пароль</label>
             <div className="relative">
               <Input
                 type={showPass ? "text" : "password"}
-                value={nordPass}
-                onChange={e => setNordPass(e.target.value)}
-                placeholder="Пароль из Manual Setup"
+                value={socks5Pass}
+                onChange={e => setSocks5Pass(e.target.value)}
+                placeholder="Произвольный пароль"
                 className="pr-10"
               />
               <button
@@ -525,10 +543,17 @@ function ChangeCredentialsModal({ open, onOpenChange, proxy }: { open: boolean; 
             </div>
           </div>
         </div>
-        <Button onClick={onSave} disabled={updateCredentials.isPending || !nordUser.trim() || !nordPass.trim()} className="w-full">
-          {updateCredentials.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          Сохранить и перезапустить
-        </Button>
+        <div className="flex gap-2">
+          {proxy.hasSocks5Creds && (
+            <Button variant="outline" onClick={onRemove} disabled={setSocks5Credentials.isPending} className="flex-1">
+              Убрать авторизацию
+            </Button>
+          )}
+          <Button onClick={onSave} disabled={setSocks5Credentials.isPending || !socks5User.trim() || !socks5Pass.trim()} className="flex-1">
+            {setSocks5Credentials.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Сохранить
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
