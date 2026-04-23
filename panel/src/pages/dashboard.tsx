@@ -23,6 +23,37 @@ function getFlagEmoji(code: string) {
   return String.fromCodePoint(...code.toUpperCase().split("").map((c) => 127397 + c.charCodeAt(0)));
 }
 
+function RotationCountdown({ nextAt }: { nextAt: string }) {
+  const [remaining, setRemaining] = useState<number>(() =>
+    Math.max(0, new Date(nextAt).getTime() - Date.now())
+  );
+
+  useEffect(() => {
+    const calc = () => setRemaining(Math.max(0, new Date(nextAt).getTime() - Date.now()));
+    calc();
+    const id = setInterval(calc, 1000);
+    return () => clearInterval(id);
+  }, [nextAt]);
+
+  if (remaining === 0) {
+    return <span className="font-mono text-xs text-muted-foreground animate-pulse">00:00:00</span>;
+  }
+
+  const s = Math.floor(remaining / 1000);
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const formatted = hh > 0
+    ? `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`
+    : `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+
+  return (
+    <span className="font-mono text-sm tabular-nums font-semibold text-amber-600 dark:text-amber-400 tracking-wider">
+      {formatted}
+    </span>
+  );
+}
+
 async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
     try {
@@ -274,8 +305,9 @@ export function Dashboard() {
                             )}
                             {proxy.rotationNextAt && proxy.rotationInterval > 0 && (
                               <div>
-                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_next_rotation")}</p>
-                                <p className="text-muted-foreground">{format(new Date(proxy.rotationNextAt), "d MMM yyyy, HH:mm")}</p>
+                                <p className="text-xs text-muted-foreground mb-1">{t("dash_expand_next_rotation")}</p>
+                                <RotationCountdown nextAt={proxy.rotationNextAt} />
+                                <p className="text-[11px] text-muted-foreground/70 mt-0.5">{format(new Date(proxy.rotationNextAt), "d MMM, HH:mm:ss")}</p>
                               </div>
                             )}
                           </div>
