@@ -23,6 +23,21 @@ function getFlagEmoji(code: string) {
   return String.fromCodePoint(...code.toUpperCase().split("").map((c) => 127397 + c.charCodeAt(0)));
 }
 
+function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.position = "absolute";
+  el.style.left = "-9999px";
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand("copy");
+  document.body.removeChild(el);
+  return Promise.resolve();
+}
+
 function StatusBadge({ status }: { status: string }) {
   const { t } = useLang();
   const map: Record<string, { color: string; key: "status_running" | "status_starting" | "status_stopped" | "status_error" }> = {
@@ -195,9 +210,10 @@ function CopyField({ label, value, secret }: { label: string; value: string; sec
   const [copied, setCopied] = useState(false);
 
   const onCopy = useCallback(() => {
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyToClipboard(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }, [value]);
 
   const display = secret && !visible ? "•".repeat(Math.min(value.length, 16)) : value;
@@ -237,9 +253,10 @@ function ConnectionStringModal({ open, onOpenChange, proxyId, proxyName }: { ope
 
   const onCopyFull = useCallback(() => {
     if (data) {
-      navigator.clipboard.writeText(data.proxyString);
-      setCopiedFull(true);
-      setTimeout(() => setCopiedFull(false), 2000);
+      copyToClipboard(data.proxyString).then(() => {
+        setCopiedFull(true);
+        setTimeout(() => setCopiedFull(false), 2000);
+      });
     }
   }, [data]);
 
@@ -275,7 +292,7 @@ function ConnectionStringModal({ open, onOpenChange, proxyId, proxyName }: { ope
             </div>
             <div className="grid grid-cols-2 gap-2">
               <CopyField label={t("conn_user")} value={data.nordUser} />
-              <CopyField label={t("conn_pass")} value={data.proxyString.split(":")[2]?.split("@")[0] ?? "••••••••"} secret />
+              <CopyField label={t("conn_pass")} value={data.nordPass ?? ""} secret />
             </div>
           </div>
         ) : (
@@ -310,7 +327,7 @@ function ChangeCountryModal({ open, onOpenChange, proxy }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
         <DialogHeader>
           <DialogTitle>{t("country_title")} — {proxy.name}</DialogTitle>
           <DialogDescription>{t("country_desc")}</DialogDescription>
@@ -352,7 +369,7 @@ function ProxyLogsModal({ open, onOpenChange, proxyId, proxyName }: { open: bool
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+      <DialogContent className="max-w-4xl h-[80vh] flex flex-col" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
         <DialogHeader>
           <DialogTitle>{t("logs_title")} — {proxyName}</DialogTitle>
         </DialogHeader>
@@ -414,7 +431,7 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Timer className="h-5 w-5 text-amber-500" />
