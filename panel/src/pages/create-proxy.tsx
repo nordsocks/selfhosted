@@ -244,13 +244,11 @@ export function CreateProxy() {
   const onSubmit = async (values: CreateProxyValues) => {
     try {
       await createProxy.mutateAsync({
-        data: {
-          name: values.name,
-          nordUser: values.nordUser,
-          nordPass: values.nordPass,
-          country: values.country,
-          city: values.city || undefined,
-        },
+        name: values.name,
+        nordUser: values.nordUser,
+        nordPass: values.nordPass,
+        country: values.country,
+        city: values.city || undefined,
       });
       toast({ title: t("create_success_title"), description: t("create_success_desc") });
       setLocation("/");
