@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node ./build.mjs && node --enable-source-maps ./dist/index.mjs",
     "build": "node ./build.mjs",
-    "start": "node --enable-source-maps ./dist/index.mjs"
+    "start": "node --env-file=.env --enable-source-maps ./dist/index.mjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
