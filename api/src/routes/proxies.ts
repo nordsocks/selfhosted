@@ -7,7 +7,7 @@ import { getCountryByCode } from "../lib/countries";
 import {
   createAndStartContainer, stopAndRemoveContainer, restartContainer,
   getContainerStatus, getContainerLogs, allocatePort, getPublicIp,
-  applyIpWhitelist, removeIpWhitelist,
+  applyIpWhitelist, removeIpWhitelist, getContainerIp,
 } from "../lib/docker";
 
 const router: IRouter = Router();
@@ -340,8 +340,13 @@ router.patch("/proxies/:id/allowed-ips", authenticate, async (req, res): Promise
     .returning();
 
   try {
-    if (ipsStr) {
-      await applyIpWhitelist(proxy.externalPort, ipsStr.split(","));
+    if (ipsStr && proxy.containerId) {
+      const containerIp = await getContainerIp(proxy.containerId);
+      if (containerIp) {
+        await applyIpWhitelist(proxy.externalPort, ipsStr.split(","), containerIp);
+      } else {
+        req.log.warn({ proxyId: id }, "Container IP not available, whitelist skipped");
+      }
     } else {
       await removeIpWhitelist(proxy.externalPort);
     }
