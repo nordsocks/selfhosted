@@ -2,7 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { runMigrations, db, shProxiesTable } from "./db";
 import { and, gt, lte, not, eq } from "drizzle-orm";
-import { createAndStartContainer, stopAndRemoveContainer } from "./lib/docker";
+import { createAndStartContainer, stopAndRemoveContainer, initSnatRules } from "./lib/docker";
 import { decrypt } from "./lib/crypto";
 
 const rawPort = process.env["PORT"];
@@ -14,6 +14,8 @@ const port = Number(rawPort);
 async function main() {
   await runMigrations();
   logger.info("Database migrations complete");
+
+  await initSnatRules();
 
   app.listen(port, "0.0.0.0", () => {
     logger.info({ port }, "NordSOCKS Self-Hosted API server started");
