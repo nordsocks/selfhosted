@@ -27,6 +27,7 @@ function formatProxy(p: typeof shProxiesTable.$inferSelect) {
     allowedIps: allowedIps,
     hasSocks5Creds: !!(p.socks5UserEncrypted && p.socks5PassEncrypted),
     rotationInterval: p.rotationInterval ?? 0,
+    rotationMode: (p.rotationMode ?? "fixed") as "fixed" | "random",
     rotationNextAt: p.rotationNextAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -109,6 +110,42 @@ router.post("/proxies", authenticate, async (req, res): Promise<void> => {
   }
 });
 
+router.post("/proxies/:id/start", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+  if (proxy.status === "running" || proxy.status === "starting") {
+    res.status(400).json({ error: "Proxy is already running" }); return;
+  }
+  try {
+    if (proxy.containerId) {
+      await stopAndRemoveContainer(proxy.containerId).catch(() => {});
+    }
+    const nordUser = decrypt(proxy.nordUserEncrypted);
+    const nordPass = decrypt(proxy.nordPassEncrypted);
+    const allowedIps = proxy.allowedIps ? proxy.allowedIps.split(",").map(s => s.trim()).filter(Boolean) : null;
+    const containerId = await createAndStartContainer({
+      name: `${proxy.userId}_${proxy.id}`,
+      nordUser, nordPass,
+      country: proxy.country, city: proxy.city,
+      externalPort: proxy.externalPort,
+      socks5User: proxy.socks5UserEncrypted ? decrypt(proxy.socks5UserEncrypted) : undefined,
+      socks5Pass: proxy.socks5PassEncrypted ? decrypt(proxy.socks5PassEncrypted) : undefined,
+      allowedIps,
+    });
+    const [updated] = await db.update(shProxiesTable)
+      .set({ containerId, status: "starting", updatedAt: new Date() })
+      .where(eq(shProxiesTable.id, id))
+      .returning();
+    res.json(formatProxy(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to start container");
+    res.status(500).json({ error: "Failed to start container" });
+  }
+});
+
 router.get("/proxies/:id/status", authenticate, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
   const [proxy] = await db.select().from(shProxiesTable).where(
@@ -170,7 +207,7 @@ router.delete("/proxies/:id", authenticate, async (req, res): Promise<void> => {
 
 router.patch("/proxies/:id/rotation", authenticate, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
-  const { rotationInterval } = req.body as { rotationInterval: number };
+  const { rotationInterval, rotationMode } = req.body as { rotationInterval: number; rotationMode?: "fixed" | "random" };
   if (typeof rotationInterval !== "number" || rotationInterval < 0) {
     res.status(400).json({ error: "Validation error", message: "rotationInterval must be non-negative" });
     return;
@@ -180,8 +217,9 @@ router.patch("/proxies/:id/rotation", authenticate, async (req, res): Promise<vo
   );
   if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
   const rotationNextAt = rotationInterval > 0 ? new Date(Date.now() + rotationInterval * 60_000) : null;
+  const mode = rotationMode === "random" ? "random" : "fixed";
   const [updated] = await db.update(shProxiesTable)
-    .set({ rotationInterval, rotationNextAt })
+    .set({ rotationInterval, rotationMode: mode, rotationNextAt })
     .where(eq(shProxiesTable.id, id))
     .returning();
   res.json(formatProxy(updated));
