@@ -32,7 +32,20 @@ function formatProxy(p: typeof shProxiesTable.$inferSelect) {
 
 router.get("/proxies", authenticate, async (req, res): Promise<void> => {
   const proxies = await db.select().from(shProxiesTable).where(eq(shProxiesTable.userId, req.user!.userId));
-  res.json(proxies.map(formatProxy));
+  const updated = await Promise.all(proxies.map(async (p) => {
+    if (p.containerId && (p.status === "starting" || p.status === "running")) {
+      const liveStatus = await getContainerStatus(p.containerId);
+      if (liveStatus !== p.status) {
+        const [u] = await db.update(shProxiesTable)
+          .set({ status: liveStatus, updatedAt: new Date() })
+          .where(eq(shProxiesTable.id, p.id))
+          .returning();
+        return u;
+      }
+    }
+    return p;
+  }));
+  res.json(updated.map(formatProxy));
 });
 
 router.post("/proxies", authenticate, async (req, res): Promise<void> => {
