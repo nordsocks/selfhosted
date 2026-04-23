@@ -30,15 +30,18 @@ async function copyToClipboard(text: string): Promise<void> {
       return;
     } catch {}
   }
+  // Fallback for HTTP context: insert textarea inside the dialog focus-scope
+  // so Radix focus-trap doesn't block execCommand
   const el = document.createElement("textarea");
   el.value = text;
   el.setAttribute("readonly", "");
-  el.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none;";
-  document.body.appendChild(el);
+  el.style.cssText = "position:absolute;opacity:0;width:1px;height:1px;top:0;left:0;";
+  const scope = (document.querySelector('[role="dialog"]') as HTMLElement) ?? document.body;
+  scope.appendChild(el);
   el.focus();
   el.select();
   try { document.execCommand("copy"); } catch {}
-  document.body.removeChild(el);
+  scope.removeChild(el);
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -265,7 +268,7 @@ function ConnectionStringModal({ open, onOpenChange, proxyId, proxyName }: { ope
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl w-full" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+      <DialogContent className="sm:max-w-xl w-full">
         <DialogHeader className="pb-1">
           <DialogTitle className="text-base">{t("conn_title")} — {proxyName}</DialogTitle>
           <DialogDescription className="text-red-500 font-medium text-xs">{t("conn_warning")}</DialogDescription>
@@ -336,7 +339,7 @@ function ChangeCountryModal({ open, onOpenChange, proxy }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("country_title")} — {proxy.name}</DialogTitle>
           <DialogDescription>{t("country_desc")}</DialogDescription>
@@ -378,7 +381,7 @@ function ProxyLogsModal({ open, onOpenChange, proxyId, proxyName }: { open: bool
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{t("logs_title")} — {proxyName}</DialogTitle>
         </DialogHeader>
@@ -440,7 +443,7 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Timer className="h-5 w-5 text-amber-500" />
@@ -511,7 +514,7 @@ function Socks5CredentialsModal({ open, onOpenChange, proxy }: { open: boolean; 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCog className="h-5 w-5 text-violet-500" />
@@ -596,7 +599,7 @@ function IpWhitelistModal({ open, onOpenChange, proxy }: { open: boolean; onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-emerald-500" />
