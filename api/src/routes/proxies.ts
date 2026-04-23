@@ -196,7 +196,7 @@ router.get("/proxies/:id/connection", authenticate, async (req, res): Promise<vo
   const nordPass = decrypt(proxy.nordPassEncrypted);
   const ip = proxy.publicIp ?? "0.0.0.0";
   const port = proxy.externalPort;
-  res.json({ proxyString: `socks5://${nordUser}:${nordPass}@${ip}:${port}`, ip, port, nordUser });
+  res.json({ proxyString: `socks5://${nordUser}:${nordPass}@${ip}:${port}`, ip, port, nordUser, nordPass });
 });
 
 router.get("/proxies/:id/logs", authenticate, async (req, res): Promise<void> => {
