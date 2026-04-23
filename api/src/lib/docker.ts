@@ -21,6 +21,8 @@ export interface ContainerConfig {
   name: string;
   nordUser: string;
   nordPass: string;
+  socks5User?: string | null;
+  socks5Pass?: string | null;
   country: string;
   city?: string | null;
   externalPort: number;
@@ -49,6 +51,10 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
   ];
 
   if (config.city) env.push(`NORDVPN_CITY=${config.city}`);
+  if (config.socks5User && config.socks5Pass) {
+    env.push(`SOCKS5_USER=${config.socks5User}`);
+    env.push(`SOCKS5_PASSWORD=${config.socks5Pass}`);
+  }
 
   const container = await d.createContainer({
     name: containerName,
