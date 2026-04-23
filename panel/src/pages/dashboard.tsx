@@ -1,9 +1,9 @@
-import { useGetProxies, PROXIES_QUERY_KEY, useStartProxy, useStopProxy, useRestartProxy, useDeleteProxy, useGetConnectionString, useGetCountries, useChangeCountry, useGetProxyLogs, useSetRotation, type Proxy } from "@/hooks/use-proxies";
+import { useGetProxies, PROXIES_QUERY_KEY, useStartProxy, useStopProxy, useRestartProxy, useDeleteProxy, useGetConnectionString, useGetCountries, useChangeCountry, useGetProxyLogs, useSetRotation, useUpdateCredentials, useSetAllowedIps, type Proxy } from "@/hooks/use-proxies";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Play, Square, RotateCw, Globe, Key, Trash2, TerminalSquare, Copy, Check, Timer, Plus, Eye, EyeOff } from "lucide-react";
-import { useState, useCallback } from "react";
+import { Loader2, Play, Square, RotateCw, Globe, Key, Trash2, TerminalSquare, Copy, Check, Timer, Plus, Eye, EyeOff, UserCog, ShieldCheck, X } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -56,6 +56,8 @@ export function Dashboard() {
   const [showChangeCountry, setShowChangeCountry] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [showRotation, setShowRotation] = useState(false);
+  const [showChangeCredentials, setShowChangeCredentials] = useState(false);
+  const [showIpWhitelist, setShowIpWhitelist] = useState(false);
 
   const handleAction = async (action: any, id: string, name: string) => {
     try {
@@ -153,6 +155,12 @@ export function Dashboard() {
                       <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowConnString(true); }} title={t("dash_action_conn")}>
                         <Key className="h-4 w-4" />
                       </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCredentials(true); }} title="Сменить учётные данные">
+                        <UserCog className="h-4 w-4 text-violet-500" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowIpWhitelist(true); }} title="IP-вайтлист" className={proxy.allowedIps && proxy.allowedIps.length > 0 ? "text-emerald-500 hover:text-emerald-600" : ""}>
+                        <ShieldCheck className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowLogs(true); }} title={t("dash_action_logs")}>
                         <TerminalSquare className="h-4 w-4" />
                       </Button>
@@ -174,6 +182,8 @@ export function Dashboard() {
           <ChangeCountryModal open={showChangeCountry} onOpenChange={setShowChangeCountry} proxy={activeProxy} />
           <ProxyLogsModal open={showLogs} onOpenChange={setShowLogs} proxyId={activeProxy.id} proxyName={activeProxy.name} />
           <RotationModal open={showRotation} onOpenChange={setShowRotation} proxy={activeProxy} />
+          <ChangeCredentialsModal open={showChangeCredentials} onOpenChange={setShowChangeCredentials} proxy={activeProxy} />
+          <IpWhitelistModal open={showIpWhitelist} onOpenChange={setShowIpWhitelist} proxy={activeProxy} />
         </>
       )}
     </div>
@@ -438,6 +448,151 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
         <Button onClick={onSave} disabled={saving} className="w-full">
           {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           {t("rotation_save")}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChangeCredentialsModal({ open, onOpenChange, proxy }: { open: boolean; onOpenChange: (o: boolean) => void; proxy: Proxy }) {
+  const updateCredentials = useUpdateCredentials();
+  const { toast } = useToast();
+  const [nordUser, setNordUser] = useState("");
+  const [nordPass, setNordPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+
+  const onSave = async () => {
+    if (!nordUser.trim() || !nordPass.trim()) return;
+    try {
+      await updateCredentials.mutateAsync({ id: proxy.id, data: { nordUser: nordUser.trim(), nordPass: nordPass.trim() } });
+      toast({ title: "Учётные данные обновлены, прокси перезапускается" });
+      setNordUser(""); setNordPass("");
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCog className="h-5 w-5 text-violet-500" />
+            Сменить учётные данные — {proxy.name}
+          </DialogTitle>
+          <DialogDescription>Новые сервисные учётные данные NordVPN. Прокси будет перезапущен.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Сервисный логин NordVPN</label>
+            <Input value={nordUser} onChange={e => setNordUser(e.target.value)} placeholder="Логин из Manual Setup" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Сервисный пароль NordVPN</label>
+            <div className="relative">
+              <Input
+                type={showPass ? "text" : "password"}
+                value={nordPass}
+                onChange={e => setNordPass(e.target.value)}
+                placeholder="Пароль из Manual Setup"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+        <Button onClick={onSave} disabled={updateCredentials.isPending || !nordUser.trim() || !nordPass.trim()} className="w-full">
+          {updateCredentials.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+          Сохранить и перезапустить
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function IpWhitelistModal({ open, onOpenChange, proxy }: { open: boolean; onOpenChange: (o: boolean) => void; proxy: Proxy }) {
+  const setAllowedIps = useSetAllowedIps();
+  const { toast } = useToast();
+  const [ips, setIps] = useState<string[]>([]);
+  const [newIp, setNewIp] = useState("");
+
+  useEffect(() => {
+    if (open) setIps(proxy.allowedIps ?? []);
+  }, [open, proxy.allowedIps]);
+
+  const addIp = () => {
+    const trimmed = newIp.trim();
+    if (trimmed && !ips.includes(trimmed)) {
+      setIps(prev => [...prev, trimmed]);
+    }
+    setNewIp("");
+  };
+
+  const removeIp = (ip: string) => setIps(prev => prev.filter(i => i !== ip));
+
+  const onSave = async () => {
+    try {
+      await setAllowedIps.mutateAsync({ id: proxy.id, allowedIps: ips.length > 0 ? ips : null });
+      toast({ title: ips.length > 0 ? `IP-вайтлист обновлён (${ips.length} IP)` : "IP-вайтлист отключён — прокси открыт" });
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const isValidIp = (v: string) => /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(v.trim());
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-emerald-500" />
+            IP-вайтлист — {proxy.name}
+          </DialogTitle>
+          <DialogDescription>
+            Прокси будет доступен без логина/пароля, но только с указанных IP-адресов. Оставьте список пустым — прокси будет открыт.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="flex gap-2">
+            <Input
+              value={newIp}
+              onChange={e => setNewIp(e.target.value)}
+              placeholder="192.168.1.100 или 10.0.0.0/24"
+              onKeyDown={e => e.key === "Enter" && addIp()}
+            />
+            <Button variant="secondary" onClick={addIp} disabled={!isValidIp(newIp)}>
+              Добавить
+            </Button>
+          </div>
+          {ips.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-3 border border-dashed rounded-lg">
+              Список пуст — прокси открыт для всех
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {ips.map(ip => (
+                <div key={ip} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40 border border-border">
+                  <span className="font-mono text-sm">{ip}</span>
+                  <button type="button" onClick={() => removeIp(ip)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button onClick={onSave} disabled={setAllowedIps.isPending} className="w-full">
+          {setAllowedIps.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+          Сохранить
         </Button>
       </DialogContent>
     </Dialog>
