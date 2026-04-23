@@ -38,6 +38,17 @@ export async function isDockerAvailable(): Promise<boolean> {
   }
 }
 
+export async function getContainerIp(containerId: string): Promise<string | null> {
+  try {
+    const info = await getDocker().getContainer(containerId).inspect();
+    const networks = info.NetworkSettings.Networks;
+    const firstNetwork = Object.values(networks)[0];
+    return firstNetwork?.IPAddress ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createAndStartContainer(config: ContainerConfig): Promise<string> {
   const d = getDocker();
   const containerName = `sh_nordvpn_${config.name.replace(/[^a-z0-9_-]/gi, "_")}_${config.externalPort}`;
@@ -54,7 +65,7 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
   if (config.city) env.push(`NORDVPN_CITY=${config.city}`);
   if (config.socks5User && config.socks5Pass) {
     env.push(`SOCKS5_USER=${config.socks5User}`);
-    env.push(`SOCKS5_PASSWORD=${config.socks5Pass}`);
+    env.push(`SOCKS5_PASS=${config.socks5Pass}`);
   }
 
   const container = await d.createContainer({
@@ -74,8 +85,12 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
 
   await container.start();
 
-  if (config.allowedIps && config.allowedIps.length > 0) {
-    await applyIpWhitelist(config.externalPort, config.allowedIps);
+  // Get container IP (assigned after start when connected to Docker network)
+  const containerInfo = await container.inspect();
+  const containerIp = Object.values(containerInfo.NetworkSettings.Networks)[0]?.IPAddress ?? null;
+
+  if (config.allowedIps && config.allowedIps.length > 0 && containerIp) {
+    await applyIpWhitelist(config.externalPort, config.allowedIps, containerIp);
   } else {
     await removeIpWhitelist(config.externalPort);
   }
@@ -83,18 +98,59 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
   return container.id;
 }
 
-export async function applyIpWhitelist(externalPort: number, allowedIps: string[]): Promise<void> {
+/**
+ * Remove all references to a chain from DOCKER-USER chain.
+ * This is needed because after DNAT, traffic goes through FORWARD (via DOCKER-USER),
+ * not INPUT — so INPUT chain rules have no effect on Docker published ports.
+ */
+async function cleanChainFromDockerUser(chain: string): Promise<void> {
+  try {
+    const { stdout } = await execAsync(`iptables -S DOCKER-USER 2>/dev/null || echo ""`);
+    for (const line of stdout.split("\n")) {
+      if (line.includes(` ${chain}`)) {
+        const deleteCmd = line.replace(/^-A DOCKER-USER/, "iptables -D DOCKER-USER").trim();
+        if (deleteCmd.startsWith("iptables")) {
+          await execAsync(`${deleteCmd} 2>/dev/null || true`);
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Apply IP whitelist using DOCKER-USER chain.
+ *
+ * Docker published port traffic flows:
+ *   external:PORT → PREROUTING (DNAT → containerIP:1080) → FORWARD (DOCKER-USER) → container
+ *
+ * INPUT chain has NO effect on this traffic. We must use DOCKER-USER.
+ * We match by destination (container IP) and dport (internal SOCKS5 port).
+ */
+export async function applyIpWhitelist(externalPort: number, allowedIps: string[], containerIp: string): Promise<void> {
   const chain = `NS_${externalPort}`;
   try {
+    // Remove any existing references to this chain from DOCKER-USER
+    await cleanChainFromDockerUser(chain);
+
+    // Create or flush our chain
     await execAsync(`iptables -N ${chain} 2>/dev/null || iptables -F ${chain}`);
+
+    // Allow specified source IPs/CIDRs
     for (const ip of allowedIps) {
       const trimmed = ip.trim();
-      if (trimmed) await execAsync(`iptables -A ${chain} -s ${trimmed} -j ACCEPT`);
+      if (trimmed) await execAsync(`iptables -A ${chain} -s ${trimmed} -j RETURN`);
     }
+    // Drop everything else
     await execAsync(`iptables -A ${chain} -j DROP`);
+
+    // Insert jump into DOCKER-USER, targeting this specific container's internal port
     await execAsync(
-      `iptables -C INPUT -p tcp --dport ${externalPort} -j ${chain} 2>/dev/null || iptables -I INPUT -p tcp --dport ${externalPort} -j ${chain}`
+      `iptables -I DOCKER-USER -d ${containerIp} -p tcp --dport ${SOCKS5_INTERNAL_PORT} -j ${chain}`
     );
+
+    logger.info({ chain, containerIp, allowedIps }, "IP whitelist applied via DOCKER-USER");
   } catch (err) {
     logger.warn({ err }, "iptables whitelist apply failed");
   }
@@ -103,10 +159,12 @@ export async function applyIpWhitelist(externalPort: number, allowedIps: string[
 export async function removeIpWhitelist(externalPort: number): Promise<void> {
   const chain = `NS_${externalPort}`;
   try {
-    await execAsync(`iptables -D INPUT -p tcp --dport ${externalPort} -j ${chain} 2>/dev/null || true`);
+    await cleanChainFromDockerUser(chain);
     await execAsync(`iptables -F ${chain} 2>/dev/null || true`);
     await execAsync(`iptables -X ${chain} 2>/dev/null || true`);
+    logger.info({ chain }, "IP whitelist removed");
   } catch {
+    // ignore
   }
 }
 
