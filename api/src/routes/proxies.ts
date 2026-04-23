@@ -7,11 +7,13 @@ import { getCountryByCode } from "../lib/countries";
 import {
   createAndStartContainer, stopAndRemoveContainer, restartContainer,
   getContainerStatus, getContainerLogs, allocatePort, getPublicIp,
+  applyIpWhitelist, removeIpWhitelist,
 } from "../lib/docker";
 
 const router: IRouter = Router();
 
 function formatProxy(p: typeof shProxiesTable.$inferSelect) {
+  const allowedIps = p.allowedIps ? (p.allowedIps.split(",").map(s => s.trim()).filter(Boolean)) : null;
   return {
     id: String(p.id),
     name: p.name,
@@ -22,6 +24,7 @@ function formatProxy(p: typeof shProxiesTable.$inferSelect) {
     status: p.status,
     containerId: p.containerId ?? null,
     publicIp: p.publicIp ?? null,
+    allowedIps: allowedIps,
     rotationInterval: p.rotationInterval ?? 0,
     rotationNextAt: p.rotationNextAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
@@ -232,6 +235,80 @@ router.patch("/proxies/:id/country", authenticate, async (req, res): Promise<voi
     req.log.error({ err }, "Failed to change country");
     res.status(500).json({ error: "Failed to change country" });
   }
+});
+
+router.patch("/proxies/:id/credentials", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const { nordUser, nordPass } = req.body as { nordUser: string; nordPass: string };
+  if (!nordUser || !nordPass) {
+    res.status(400).json({ error: "Validation error", message: "nordUser and nordPass are required" });
+    return;
+  }
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+
+  const nordUserEncrypted = encrypt(nordUser);
+  const nordPassEncrypted = encrypt(nordPass);
+
+  if (proxy.containerId) await stopAndRemoveContainer(proxy.containerId).catch(() => {});
+
+  const allowedIps = proxy.allowedIps
+    ? proxy.allowedIps.split(",").map(s => s.trim()).filter(Boolean)
+    : null;
+
+  try {
+    const containerId = await createAndStartContainer({
+      name: `${req.user!.userId}_${proxy.id}`,
+      nordUser, nordPass,
+      country: proxy.country, city: proxy.city ?? null,
+      externalPort: proxy.externalPort,
+      allowedIps,
+    });
+    const [updated] = await db.update(shProxiesTable)
+      .set({ nordUserEncrypted, nordPassEncrypted, containerId, status: "starting", updatedAt: new Date() })
+      .where(eq(shProxiesTable.id, id))
+      .returning();
+    res.json(formatProxy(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to restart container after credential change");
+    await db.update(shProxiesTable)
+      .set({ nordUserEncrypted, nordPassEncrypted, status: "error", containerId: null, updatedAt: new Date() })
+      .where(eq(shProxiesTable.id, id));
+    res.status(500).json({ error: "Credentials saved but container restart failed" });
+  }
+});
+
+router.patch("/proxies/:id/allowed-ips", authenticate, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const { allowedIps } = req.body as { allowedIps: string[] | null };
+
+  const [proxy] = await db.select().from(shProxiesTable).where(
+    and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
+  );
+  if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
+
+  const ipsStr = Array.isArray(allowedIps) && allowedIps.length > 0
+    ? allowedIps.map(s => s.trim()).filter(Boolean).join(",")
+    : null;
+
+  const [updated] = await db.update(shProxiesTable)
+    .set({ allowedIps: ipsStr, updatedAt: new Date() })
+    .where(eq(shProxiesTable.id, id))
+    .returning();
+
+  try {
+    if (ipsStr) {
+      await applyIpWhitelist(proxy.externalPort, ipsStr.split(","));
+    } else {
+      await removeIpWhitelist(proxy.externalPort);
+    }
+  } catch (err) {
+    req.log.warn({ err }, "iptables update failed");
+  }
+
+  res.json(formatProxy(updated));
 });
 
 export default router;
