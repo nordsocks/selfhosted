@@ -2,8 +2,8 @@ import { useGetProxies, PROXIES_QUERY_KEY, useStartProxy, useStopProxy, useResta
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Play, Square, RotateCw, Globe, Key, Trash2, TerminalSquare, Copy, Check, Timer, Plus, Eye, EyeOff, UserCog, ShieldCheck, X } from "lucide-react";
-import { useState, useCallback, useEffect } from "react";
+import { Loader2, Play, Square, RotateCw, Globe, Key, Trash2, TerminalSquare, Copy, Check, Timer, Plus, Eye, EyeOff, UserCog, ShieldCheck, X, ChevronDown, ChevronRight, Shuffle } from "lucide-react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -95,6 +95,7 @@ export function Dashboard() {
   const [showRotation, setShowRotation] = useState(false);
   const [showChangeCredentials, setShowChangeCredentials] = useState(false);
   const [showIpWhitelist, setShowIpWhitelist] = useState(false);
+  const [expandedProxyId, setExpandedProxyId] = useState<string | null>(null);
 
   const handleAction = async (action: any, id: string, name: string) => {
     try {
@@ -147,67 +148,141 @@ export function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {proxies?.map((proxy) => (
-                <TableRow key={proxy.id}>
-                  <TableCell className="font-medium">{proxy.name}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg" title={proxy.country}>{getFlagEmoji(proxy.country)}</span>
-                      <span>{proxy.countryName}{proxy.city ? ` (${proxy.city})` : ''}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">{proxy.externalPort}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">{proxy.publicIp || "—"}</TableCell>
-                  <TableCell><StatusBadge status={proxy.status} /></TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {format(new Date(proxy.createdAt), "MMM d, HH:mm")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {proxy.status !== "running" && proxy.status !== "starting" && (
-                        <Button variant="ghost" size="icon" onClick={() => handleAction(startProxy, proxy.id, proxy.name)} disabled={startProxy.isPending} title={t("dash_action_start")}>
-                          <Play className="h-4 w-4 text-green-500" />
-                        </Button>
-                      )}
-                      {proxy.status === "running" && (
-                        <Button variant="ghost" size="icon" onClick={() => handleAction(stopProxy, proxy.id, proxy.name)} disabled={stopProxy.isPending} title={t("dash_action_stop")}>
-                          <Square className="h-4 w-4 text-gray-500" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => handleAction(restartProxy, proxy.id, proxy.name)} disabled={restartProxy.isPending} title={t("dash_action_restart")}>
-                        <RotateCw className="h-4 w-4 text-blue-500" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCountry(true); }} title={t("dash_action_country")}>
-                        <Globe className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => { setActiveProxy(proxy); setShowRotation(true); }}
-                        title={t("rotation_action")}
-                        className={proxy.rotationInterval > 0 ? "text-amber-500 hover:text-amber-600" : ""}
-                      >
-                        <Timer className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowConnString(true); }} title={t("dash_action_conn")}>
-                        <Key className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCredentials(true); }} title="Сменить учётные данные">
-                        <UserCog className="h-4 w-4 text-violet-500" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowIpWhitelist(true); }} title="IP-вайтлист" className={proxy.allowedIps && proxy.allowedIps.length > 0 ? "text-emerald-500 hover:text-emerald-600" : ""}>
-                        <ShieldCheck className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowLogs(true); }} title={t("dash_action_logs")}>
-                        <TerminalSquare className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(proxy.id, proxy.name)} disabled={deleteProxy.isPending} title={t("dash_action_delete")}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {proxies?.map((proxy) => {
+                const isExpanded = expandedProxyId === proxy.id;
+                return (
+                  <React.Fragment key={proxy.id}>
+                    <TableRow className={isExpanded ? "border-b-0" : ""}>
+                      <TableCell className="font-medium">
+                        <button
+                          className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                          onClick={() => setExpandedProxyId(isExpanded ? null : proxy.id)}
+                        >
+                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                          {proxy.name}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg" title={proxy.country}>{getFlagEmoji(proxy.country)}</span>
+                          <span>{proxy.countryName}{proxy.city ? ` (${proxy.city})` : ''}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-muted-foreground">{proxy.externalPort}</TableCell>
+                      <TableCell className="font-mono text-muted-foreground">{proxy.publicIp || "—"}</TableCell>
+                      <TableCell><StatusBadge status={proxy.status} /></TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {format(new Date(proxy.createdAt), "MMM d, HH:mm")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {proxy.status !== "running" && proxy.status !== "starting" && (
+                            <Button variant="ghost" size="icon" onClick={() => handleAction(startProxy, proxy.id, proxy.name)} disabled={startProxy.isPending} title={t("dash_action_start")}>
+                              <Play className="h-4 w-4 text-green-500" />
+                            </Button>
+                          )}
+                          {proxy.status === "running" && (
+                            <Button variant="ghost" size="icon" onClick={() => handleAction(stopProxy, proxy.id, proxy.name)} disabled={stopProxy.isPending} title={t("dash_action_stop")}>
+                              <Square className="h-4 w-4 text-gray-500" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" onClick={() => handleAction(restartProxy, proxy.id, proxy.name)} disabled={restartProxy.isPending} title={t("dash_action_restart")}>
+                            <RotateCw className="h-4 w-4 text-blue-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCountry(true); }} title={t("dash_action_country")}>
+                            <Globe className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => { setActiveProxy(proxy); setShowRotation(true); }}
+                            title={t("rotation_action")}
+                            className={proxy.rotationInterval > 0 ? "text-amber-500 hover:text-amber-600" : ""}
+                          >
+                            <Timer className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowConnString(true); }} title={t("dash_action_conn")}>
+                            <Key className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCredentials(true); }} title="Сменить учётные данные">
+                            <UserCog className="h-4 w-4 text-violet-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowIpWhitelist(true); }} title="IP-вайтлист" className={proxy.allowedIps && proxy.allowedIps.length > 0 ? "text-emerald-500 hover:text-emerald-600" : ""}>
+                            <ShieldCheck className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowLogs(true); }} title={t("dash_action_logs")}>
+                            <TerminalSquare className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(proxy.id, proxy.name)} disabled={deleteProxy.isPending} title={t("dash_action_delete")}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow className="bg-muted/30 hover:bg-muted/30">
+                        <TableCell colSpan={7} className="py-3 px-6">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Исходящий IP</p>
+                              <p className="font-mono font-medium">{proxy.publicIp || "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Страна</p>
+                              <p className="flex items-center gap-1.5">
+                                <span className="text-base">{getFlagEmoji(proxy.country)}</span>
+                                <span>{proxy.countryName}{proxy.city ? `, ${proxy.city}` : ""}</span>
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Порт SOCKS5</p>
+                              <p className="font-mono font-medium">{proxy.externalPort}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Ротация</p>
+                              <p className="flex items-center gap-1.5">
+                                {proxy.rotationInterval > 0 ? (
+                                  <>
+                                    {proxy.rotationMode === "random" ? <Shuffle className="h-3.5 w-3.5 text-amber-500" /> : <Timer className="h-3.5 w-3.5 text-amber-500" />}
+                                    <span className="text-amber-600 dark:text-amber-400">
+                                      {proxy.rotationInterval >= 60
+                                        ? `${proxy.rotationInterval / 60}ч`
+                                        : `${proxy.rotationInterval}м`}
+                                      {proxy.rotationMode === "random" ? " · случайная" : " · та же страна"}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">Выключена</span>
+                                )}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Авторизация</p>
+                              <p>{proxy.hasSocks5Creds ? "Логин/пароль" : proxy.allowedIps && proxy.allowedIps.length > 0 ? "IP-вайтлист" : "Открытый"}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Создан</p>
+                              <p className="text-muted-foreground">{format(new Date(proxy.createdAt), "d MMM yyyy, HH:mm")}</p>
+                            </div>
+                            {proxy.lastCountryChangeAt && (
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">Последняя смена страны</p>
+                                <p className="text-muted-foreground">{format(new Date(proxy.lastCountryChangeAt), "d MMM yyyy, HH:mm")}</p>
+                              </div>
+                            )}
+                            {proxy.rotationNextAt && proxy.rotationInterval > 0 && (
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">Следующая ротация</p>
+                                <p className="text-muted-foreground">{format(new Date(proxy.rotationNextAt), "d MMM yyyy, HH:mm")}</p>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -418,9 +493,9 @@ function ProxyLogsModal({ open, onOpenChange, proxyId, proxyName }: { open: bool
 function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenChange: (o: boolean) => void; proxy: Proxy }) {
   const { t } = useLang();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const setRotation = useSetRotation();
   const [selectedInterval, setSelectedInterval] = useState(String(proxy.rotationInterval ?? 0));
-  const [saving, setSaving] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<"fixed" | "random">(proxy.rotationMode ?? "fixed");
 
   const INTERVALS: { value: string; key: "rotation_off" | "rotation_5m" | "rotation_10m" | "rotation_30m" | "rotation_1h" | "rotation_2h" | "rotation_4h" | "rotation_8h" | "rotation_24h" }[] = [
     { value: "0",    key: "rotation_off" },
@@ -435,25 +510,12 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
   ];
 
   const onSave = async () => {
-    setSaving(true);
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(`/api/proxies/${proxy.id}/rotation`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ rotationInterval: parseInt(selectedInterval, 10) }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await setRotation.mutateAsync({ id: proxy.id, rotationInterval: parseInt(selectedInterval, 10), rotationMode: selectedMode });
       toast({ title: t("rotation_success") });
-      queryClient.invalidateQueries({ queryKey: PROXIES_QUERY_KEY });
       onOpenChange(false);
     } catch (err: any) {
       toast({ title: t("rotation_fail"), description: err.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -474,24 +536,61 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
               <span>{t("rotation_next_at")} <strong>{format(new Date(proxy.rotationNextAt), "MMM d, HH:mm")}</strong></span>
             </div>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {INTERVALS.map(({ value, key }) => (
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">Режим ротации</p>
+            <div className="grid grid-cols-2 gap-2">
               <button
-                key={value}
-                onClick={() => setSelectedInterval(value)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors
-                  ${selectedInterval === value
+                onClick={() => setSelectedMode("fixed")}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors
+                  ${selectedMode === "fixed"
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-background border-border text-foreground hover:bg-muted"
                   }`}
               >
-                {t(key)}
+                <Globe className="h-4 w-4" />
+                Та же страна
               </button>
-            ))}
+              <button
+                onClick={() => setSelectedMode("random")}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors
+                  ${selectedMode === "random"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border text-foreground hover:bg-muted"
+                  }`}
+              >
+                <Shuffle className="h-4 w-4" />
+                Случайная страна
+              </button>
+            </div>
+            {selectedMode === "random" && (
+              <p className="text-xs text-muted-foreground mt-1">
+                При каждой ротации будет выбрана случайная страна из доступных серверов NordVPN.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">Интервал ротации</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {INTERVALS.map(({ value, key }) => (
+                <button
+                  key={value}
+                  onClick={() => setSelectedInterval(value)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors
+                    ${selectedInterval === value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border text-foreground hover:bg-muted"
+                    }`}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <Button onClick={onSave} disabled={saving} className="w-full">
-          {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+        <Button onClick={onSave} disabled={setRotation.isPending} className="w-full">
+          {setRotation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           {t("rotation_save")}
         </Button>
       </DialogContent>
