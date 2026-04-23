@@ -2,8 +2,8 @@ import { useGetProxies, PROXIES_QUERY_KEY, useStartProxy, useStopProxy, useResta
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Play, Square, RotateCw, Globe, Key, Trash2, TerminalSquare, Copy, Check, Timer, Plus } from "lucide-react";
-import { useState } from "react";
+import { Loader2, Play, Square, RotateCw, Globe, Key, Trash2, TerminalSquare, Copy, Check, Timer, Plus, Eye, EyeOff } from "lucide-react";
+import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -180,53 +180,103 @@ export function Dashboard() {
   );
 }
 
+function CopyField({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = useCallback(() => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [value]);
+
+  const display = secret && !visible ? "•".repeat(Math.min(value.length, 16)) : value;
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-medium text-muted-foreground mb-0.5 uppercase tracking-wide">{label}</p>
+        <p className="font-mono text-sm text-foreground truncate select-all">{display}</p>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {secret && (
+          <button
+            type="button"
+            onClick={() => setVisible(v => !v)}
+            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCopy}
+          className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ConnectionStringModal({ open, onOpenChange, proxyId, proxyName }: { open: boolean; onOpenChange: (o: boolean) => void; proxyId: string; proxyName: string }) {
   const { t } = useLang();
   const { data, isLoading } = useGetConnectionString(proxyId, { enabled: open });
-  const [copied, setCopied] = useState(false);
+  const [copiedFull, setCopiedFull] = useState(false);
 
-  const onCopy = () => {
+  const onCopyFull = useCallback(() => {
     if (data) {
       navigator.clipboard.writeText(data.proxyString);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedFull(true);
+      setTimeout(() => setCopiedFull(false), 2000);
     }
-  };
+  }, [data]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("conn_title")} — {proxyName}</DialogTitle>
-          <DialogDescription className="text-red-500 font-medium">{t("conn_warning")}</DialogDescription>
+      <DialogContent className="sm:max-w-xl w-full" style={{ animation: "dialog-mac 0.22s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+        <DialogHeader className="pb-1">
+          <DialogTitle className="text-base">{t("conn_title")} — {proxyName}</DialogTitle>
+          <DialogDescription className="text-red-500 font-medium text-xs">{t("conn_warning")}</DialogDescription>
         </DialogHeader>
-        <div className="mt-4">
-          {isLoading ? (
-            <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-          ) : data ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted font-mono text-sm rounded-md break-all border border-border">
-                {data.proxyString}
+
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : data ? (
+          <div className="space-y-3 pt-1">
+            <div className="relative group">
+              <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">{t("conn_copy")}</p>
+                <p className="font-mono text-xs text-foreground break-all leading-relaxed select-all">{data.proxyString}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">{t("conn_ip")}:</span> <span className="font-mono">{data.ip}</span></div>
-                <div><span className="text-muted-foreground">{t("conn_port")}:</span> <span className="font-mono">{data.port}</span></div>
-                <div><span className="text-muted-foreground">{t("conn_user")}:</span> <span className="font-mono">{data.nordUser}</span></div>
-                <div><span className="text-muted-foreground">{t("conn_pass")}:</span> <span className="font-mono">••••••••</span></div>
-              </div>
-              <Button className="w-full mt-4" variant="secondary" onClick={onCopy}>
-                {copied ? <Check className="h-4 w-4 mr-2 text-green-500" /> : <Copy className="h-4 w-4 mr-2" />}
-                {copied ? t("conn_copied") : t("conn_copy")}
-              </Button>
+              <button
+                type="button"
+                onClick={onCopyFull}
+                className="absolute top-2.5 right-2.5 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+              >
+                {copiedFull ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
             </div>
-          ) : (
-            <div className="text-destructive text-sm p-4 bg-destructive/10 rounded-md border border-destructive/20">{t("conn_fail")}</div>
-          )}
-        </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <CopyField label={t("conn_ip")} value={data.ip} />
+              <CopyField label={t("conn_port")} value={String(data.port)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <CopyField label={t("conn_user")} value={data.nordUser} />
+              <CopyField label={t("conn_pass")} value={data.proxyString.split(":")[2]?.split("@")[0] ?? "••••••••"} secret />
+            </div>
+          </div>
+        ) : (
+          <div className="text-destructive text-sm p-4 bg-destructive/10 rounded-md border border-destructive/20">{t("conn_fail")}</div>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
+
+
 
 function ChangeCountryModal({ open, onOpenChange, proxy }: { open: boolean; onOpenChange: (o: boolean) => void; proxy: Proxy }) {
   const { t } = useLang();
