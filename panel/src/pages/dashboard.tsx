@@ -155,10 +155,12 @@ export function Dashboard() {
                     <TableRow className={isExpanded ? "border-b-0" : ""}>
                       <TableCell className="font-medium">
                         <button
-                          className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                          className="flex items-center gap-1.5 hover:text-primary transition-colors group"
                           onClick={() => setExpandedProxyId(isExpanded ? null : proxy.id)}
                         >
-                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                          <span className={`inline-flex items-center justify-center rounded p-0.5 transition-all duration-200 ${isExpanded ? "bg-primary/15 text-primary rotate-0" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"}`}>
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
+                          </span>
                           {proxy.name}
                         </button>
                       </TableCell>
@@ -220,59 +222,59 @@ export function Dashboard() {
                       </TableCell>
                     </TableRow>
                     {isExpanded && (
-                      <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableRow className="bg-muted/30 hover:bg-muted/30" style={{ animation: "row-expand 0.18s ease-out both" }}>
                         <TableCell colSpan={7} className="py-3 px-6">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                             <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">Исходящий IP</p>
+                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_outgoing_ip")}</p>
                               <p className="font-mono font-medium">{proxy.publicIp || "—"}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">Страна</p>
+                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_location")}</p>
                               <p className="flex items-center gap-1.5">
                                 <span className="text-base">{getFlagEmoji(proxy.country)}</span>
                                 <span>{proxy.countryName}{proxy.city ? `, ${proxy.city}` : ""}</span>
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">Порт SOCKS5</p>
+                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_socks5_port")}</p>
                               <p className="font-mono font-medium">{proxy.externalPort}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">Ротация</p>
+                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_rotation")}</p>
                               <p className="flex items-center gap-1.5">
                                 {proxy.rotationInterval > 0 ? (
                                   <>
                                     {proxy.rotationMode === "random" ? <Shuffle className="h-3.5 w-3.5 text-amber-500" /> : <Timer className="h-3.5 w-3.5 text-amber-500" />}
                                     <span className="text-amber-600 dark:text-amber-400">
                                       {proxy.rotationInterval >= 60
-                                        ? `${proxy.rotationInterval / 60}ч`
-                                        : `${proxy.rotationInterval}м`}
-                                      {proxy.rotationMode === "random" ? " · случайная" : " · та же страна"}
+                                        ? `${proxy.rotationInterval / 60}h`
+                                        : `${proxy.rotationInterval}m`}
+                                      {proxy.rotationMode === "random" ? ` · ${t("dash_expand_rotation_random")}` : ` · ${t("dash_expand_rotation_fixed")}`}
                                     </span>
                                   </>
                                 ) : (
-                                  <span className="text-muted-foreground">Выключена</span>
+                                  <span className="text-muted-foreground">{t("dash_expand_rotation_off")}</span>
                                 )}
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">Авторизация</p>
-                              <p>{proxy.hasSocks5Creds ? "Логин/пароль" : proxy.allowedIps && proxy.allowedIps.length > 0 ? "IP-вайтлист" : "Открытый"}</p>
+                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_auth")}</p>
+                              <p>{proxy.hasSocks5Creds ? t("dash_expand_auth_creds") : proxy.allowedIps && proxy.allowedIps.length > 0 ? t("dash_expand_auth_whitelist") : t("dash_expand_auth_open")}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">Создан</p>
+                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_created")}</p>
                               <p className="text-muted-foreground">{format(new Date(proxy.createdAt), "d MMM yyyy, HH:mm")}</p>
                             </div>
                             {proxy.lastCountryChangeAt && (
                               <div>
-                                <p className="text-xs text-muted-foreground mb-0.5">Последняя смена страны</p>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_last_country")}</p>
                                 <p className="text-muted-foreground">{format(new Date(proxy.lastCountryChangeAt), "d MMM yyyy, HH:mm")}</p>
                               </div>
                             )}
                             {proxy.rotationNextAt && proxy.rotationInterval > 0 && (
                               <div>
-                                <p className="text-xs text-muted-foreground mb-0.5">Следующая ротация</p>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_next_rotation")}</p>
                                 <p className="text-muted-foreground">{format(new Date(proxy.rotationNextAt), "d MMM yyyy, HH:mm")}</p>
                               </div>
                             )}
@@ -538,7 +540,7 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
           )}
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">Режим ротации</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("rotation_mode_label")}</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setSelectedMode("fixed")}
@@ -549,7 +551,7 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
                   }`}
               >
                 <Globe className="h-4 w-4" />
-                Та же страна
+                {t("rotation_mode_fixed")}
               </button>
               <button
                 onClick={() => setSelectedMode("random")}
@@ -560,18 +562,18 @@ function RotationModal({ open, onOpenChange, proxy }: { open: boolean; onOpenCha
                   }`}
               >
                 <Shuffle className="h-4 w-4" />
-                Случайная страна
+                {t("rotation_mode_random")}
               </button>
             </div>
             {selectedMode === "random" && (
               <p className="text-xs text-muted-foreground mt-1">
-                При каждой ротации будет выбрана случайная страна из доступных серверов NordVPN.
+                {t("rotation_mode_random_hint")}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">Интервал ротации</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("rotation_interval_label")}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {INTERVALS.map(({ value, key }) => (
                 <button
