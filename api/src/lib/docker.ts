@@ -1,5 +1,9 @@
 import Docker from "dockerode";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { logger } from "./logger";
+
+const execAsync = promisify(exec);
 
 let docker: Docker | null = null;
 
@@ -20,6 +24,7 @@ export interface ContainerConfig {
   country: string;
   city?: string | null;
   externalPort: number;
+  allowedIps?: string[] | null;
 }
 
 export async function isDockerAvailable(): Promise<boolean> {
@@ -61,7 +66,41 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
   });
 
   await container.start();
+
+  if (config.allowedIps && config.allowedIps.length > 0) {
+    await applyIpWhitelist(config.externalPort, config.allowedIps);
+  } else {
+    await removeIpWhitelist(config.externalPort);
+  }
+
   return container.id;
+}
+
+export async function applyIpWhitelist(externalPort: number, allowedIps: string[]): Promise<void> {
+  const chain = `NS_${externalPort}`;
+  try {
+    await execAsync(`iptables -N ${chain} 2>/dev/null || iptables -F ${chain}`);
+    for (const ip of allowedIps) {
+      const trimmed = ip.trim();
+      if (trimmed) await execAsync(`iptables -A ${chain} -s ${trimmed} -j ACCEPT`);
+    }
+    await execAsync(`iptables -A ${chain} -j DROP`);
+    await execAsync(
+      `iptables -C INPUT -p tcp --dport ${externalPort} -j ${chain} 2>/dev/null || iptables -I INPUT -p tcp --dport ${externalPort} -j ${chain}`
+    );
+  } catch (err) {
+    logger.warn({ err }, "iptables whitelist apply failed");
+  }
+}
+
+export async function removeIpWhitelist(externalPort: number): Promise<void> {
+  const chain = `NS_${externalPort}`;
+  try {
+    await execAsync(`iptables -D INPUT -p tcp --dport ${externalPort} -j ${chain} 2>/dev/null || true`);
+    await execAsync(`iptables -F ${chain} 2>/dev/null || true`);
+    await execAsync(`iptables -X ${chain} 2>/dev/null || true`);
+  } catch {
+  }
 }
 
 export async function stopAndRemoveContainer(containerId: string): Promise<void> {
