@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { setupApi } from "@/lib/api";
 import { LangProvider } from "@/lib/i18n";
+import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
 import { Login } from "@/pages/login";
 import { Register } from "@/pages/register";
@@ -74,6 +75,7 @@ function Router() {
 
 function App() {
   return (
+    <ThemeProvider>
     <LangProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -84,6 +86,7 @@ function App() {
         </TooltipProvider>
       </QueryClientProvider>
     </LangProvider>
+    </ThemeProvider>
   );
 }
 
