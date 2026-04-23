@@ -37,7 +37,7 @@ function formatProxy(p: typeof shProxiesTable.$inferSelect) {
 router.get("/proxies", authenticate, async (req, res): Promise<void> => {
   const proxies = await db.select().from(shProxiesTable).where(eq(shProxiesTable.userId, req.user!.userId));
   const updated = await Promise.all(proxies.map(async (p) => {
-    if (p.containerId && (p.status === "starting" || p.status === "running")) {
+    if (p.containerId && p.status !== "stopped") {
       const liveStatus = await getContainerStatus(p.containerId);
       if (liveStatus !== p.status) {
         const [u] = await db.update(shProxiesTable)
