@@ -60,9 +60,25 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Track which button was clicked so dialog can animate from it
+function useDialogOriginTracker() {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const dx = e.clientX - window.innerWidth / 2;
+      const dy = e.clientY - window.innerHeight / 2;
+      document.documentElement.style.setProperty("--dialog-dx", `${dx.toFixed(0)}px`);
+      document.documentElement.style.setProperty("--dialog-dy", `${dy.toFixed(0)}px`);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+}
+
 export function Dashboard() {
   const { t } = useLang();
   const { data: proxies, isLoading } = useGetProxies();
+
+  useDialogOriginTracker();
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
