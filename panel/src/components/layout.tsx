@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Server, LogOut, LayoutDashboard, PlusCircle, UserCircle } from "lucide-react";
+import { Server, LogOut, LayoutDashboard, PlusCircle, UserCircle, Sun, Moon } from "lucide-react";
 import { useLang } from "@/lib/use-lang";
 import { LangSelector } from "@/components/lang-selector";
+import { useTheme } from "@/lib/theme";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const { t } = useLang();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -51,8 +53,15 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
             </nav>
           )}
 
-          {/* Right side: lang + logout */}
+          {/* Right side: theme toggle + lang + logout */}
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+            <button
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
             <LangSelector variant="nav" />
             {user ? (
               <button
