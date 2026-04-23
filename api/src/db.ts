@@ -37,6 +37,8 @@ export const shProxiesTable = pgTable("sh_proxies", {
   publicIp: varchar("public_ip", { length: 100 }),
   nordUserEncrypted: text("nord_user_encrypted").notNull(),
   nordPassEncrypted: text("nord_pass_encrypted").notNull(),
+  socks5UserEncrypted: text("socks5_user_encrypted"),
+  socks5PassEncrypted: text("socks5_pass_encrypted"),
   allowedIps: text("allowed_ips"),
   rotationInterval: integer("rotation_interval").notNull().default(0),
   rotationNextAt: timestamp("rotation_next_at"),
@@ -82,6 +84,8 @@ export async function runMigrations() {
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
       ALTER TABLE sh_proxies ADD COLUMN IF NOT EXISTS allowed_ips TEXT;
+      ALTER TABLE sh_proxies ADD COLUMN IF NOT EXISTS socks5_user_encrypted TEXT;
+      ALTER TABLE sh_proxies ADD COLUMN IF NOT EXISTS socks5_pass_encrypted TEXT;
     `);
   } finally {
     client.release();
