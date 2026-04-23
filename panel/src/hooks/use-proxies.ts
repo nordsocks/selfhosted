@@ -32,6 +32,7 @@ export interface Proxy {
   containerId: string | null;
   publicIp: string | null;
   allowedIps: string[] | null;
+  hasSocks5Creds: boolean;
   rotationInterval: number;
   rotationNextAt: string | null;
   createdAt: string;
@@ -115,7 +116,7 @@ export function useSetRotation() {
 export function useGetConnectionString(proxyId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["connectionString", proxyId],
-    queryFn: () => apiFetch<{ proxyString: string; ip: string; port: number; nordUser: string }>(`/proxies/${proxyId}/connection`),
+    queryFn: () => apiFetch<{ proxyString: string; ip: string; port: number; socks5User?: string; socks5Pass?: string; authMode: "credentials" | "ip-whitelist" }>(`/proxies/${proxyId}/connection`),
     enabled: options?.enabled ?? true,
   });
 }
@@ -128,11 +129,11 @@ export function useGetProxyLogs(proxyId: string, options?: { enabled?: boolean }
   });
 }
 
-export function useUpdateCredentials() {
+export function useSetSocks5Credentials() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { nordUser: string; nordPass: string } }) =>
-      apiFetch<Proxy>(`/proxies/${id}/credentials`, { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: ({ id, socks5User, socks5Pass }: { id: string; socks5User: string | null; socks5Pass: string | null }) =>
+      apiFetch<Proxy>(`/proxies/${id}/socks5-credentials`, { method: "PATCH", body: JSON.stringify({ socks5User, socks5Pass }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: PROXIES_QUERY_KEY }),
   });
 }
