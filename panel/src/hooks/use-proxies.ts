@@ -31,6 +31,7 @@ export interface Proxy {
   status: string;
   containerId: string | null;
   publicIp: string | null;
+  allowedIps: string[] | null;
   rotationInterval: number;
   rotationNextAt: string | null;
   createdAt: string;
@@ -124,6 +125,24 @@ export function useGetProxyLogs(proxyId: string, options?: { enabled?: boolean }
     queryKey: ["proxyLogs", proxyId],
     queryFn: () => apiFetch<{ logs: string; proxyId: string }>(`/proxies/${proxyId}/logs`),
     enabled: options?.enabled ?? true,
+  });
+}
+
+export function useUpdateCredentials() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { nordUser: string; nordPass: string } }) =>
+      apiFetch<Proxy>(`/proxies/${id}/credentials`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PROXIES_QUERY_KEY }),
+  });
+}
+
+export function useSetAllowedIps() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, allowedIps }: { id: string; allowedIps: string[] | null }) =>
+      apiFetch<Proxy>(`/proxies/${id}/allowed-ips`, { method: "PATCH", body: JSON.stringify({ allowedIps }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PROXIES_QUERY_KEY }),
   });
 }
 
