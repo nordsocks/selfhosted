@@ -34,6 +34,7 @@ export interface Proxy {
   allowedIps: string[] | null;
   hasSocks5Creds: boolean;
   rotationInterval: number;
+  rotationMode: "fixed" | "random";
   rotationNextAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -63,7 +64,7 @@ export function useStartProxy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }: { id: string }) =>
-      apiFetch<Proxy>(`/proxies/${id}/restart`, { method: "POST" }),
+      apiFetch<Proxy>(`/proxies/${id}/start`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: PROXIES_QUERY_KEY }),
   });
 }
@@ -107,8 +108,8 @@ export function useChangeCountry() {
 export function useSetRotation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, rotationInterval }: { id: string; rotationInterval: number }) =>
-      apiFetch<Proxy>(`/proxies/${id}/rotation`, { method: "PATCH", body: JSON.stringify({ rotationInterval }) }),
+    mutationFn: ({ id, rotationInterval, rotationMode }: { id: string; rotationInterval: number; rotationMode: "fixed" | "random" }) =>
+      apiFetch<Proxy>(`/proxies/${id}/rotation`, { method: "PATCH", body: JSON.stringify({ rotationInterval, rotationMode }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: PROXIES_QUERY_KEY }),
   });
 }
