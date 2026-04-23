@@ -251,7 +251,7 @@ export function CreateProxy() {
         city: values.city || undefined,
       });
       toast({ title: t("create_success_title"), description: t("create_success_desc") });
-      setLocation("/");
+      setLocation("/dashboard");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred";
       toast({ title: t("create_fail"), description: msg, variant: "destructive" });
