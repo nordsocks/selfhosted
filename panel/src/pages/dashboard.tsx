@@ -23,19 +23,22 @@ function getFlagEmoji(code: string) {
   return String.fromCodePoint(...code.toUpperCase().split("").map((c) => 127397 + c.charCodeAt(0)));
 }
 
-function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text);
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {}
   }
   const el = document.createElement("textarea");
   el.value = text;
-  el.style.position = "absolute";
-  el.style.left = "-9999px";
+  el.setAttribute("readonly", "");
+  el.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none;";
   document.body.appendChild(el);
+  el.focus();
   el.select();
-  document.execCommand("copy");
+  try { document.execCommand("copy"); } catch {}
   document.body.removeChild(el);
-  return Promise.resolve();
 }
 
 function StatusBadge({ status }: { status: string }) {
