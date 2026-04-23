@@ -147,11 +147,11 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">{t("dash_title")}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t("dash_title")}</h1>
         <Link href="/proxies/new">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
-            {t("nav_new_proxy")}
+            <span className="hidden sm:inline">{t("nav_new_proxy")}</span>
           </Button>
         </Link>
       </div>
@@ -165,161 +165,282 @@ export function Dashboard() {
           <p>{t("dash_empty")}</p>
         </div>
       ) : (
-        <div className="border rounded-md overflow-hidden bg-card shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead>{t("dash_col_name")}</TableHead>
-                <TableHead>{t("dash_col_location")}</TableHead>
-                <TableHead>{t("dash_col_port")}</TableHead>
-                <TableHead>{t("dash_col_ip")}</TableHead>
-                <TableHead>{t("dash_col_status")}</TableHead>
-                <TableHead>{t("dash_col_created")}</TableHead>
-                <TableHead className="text-right">{t("dash_col_actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {proxies?.map((proxy) => {
-                const isExpanded = expandedProxyId === proxy.id;
-                return (
-                  <React.Fragment key={proxy.id}>
-                    <TableRow className={isExpanded ? "border-b-0" : ""}>
-                      <TableCell className="font-medium">
-                        <button
-                          className="flex items-center gap-1.5 hover:text-primary transition-colors group"
-                          onClick={() => setExpandedProxyId(isExpanded ? null : proxy.id)}
-                        >
-                          <span className={`inline-flex items-center justify-center rounded p-0.5 transition-all duration-200 ${isExpanded ? "bg-primary/15 text-primary rotate-0" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"}`}>
-                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
-                          </span>
-                          {proxy.name}
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg" title={proxy.country}>{getFlagEmoji(proxy.country)}</span>
-                          <span>{proxy.countryName}{proxy.city ? ` (${proxy.city})` : ''}</span>
+        <>
+          {/* ── Mobile cards (< md) ── */}
+          <div className="md:hidden space-y-2">
+            {proxies?.map((proxy) => {
+              const isExpanded = expandedProxyId === proxy.id;
+              return (
+                <div key={proxy.id} className="border rounded-xl bg-card shadow-sm overflow-hidden">
+                  {/* Header row */}
+                  <button
+                    className="w-full flex items-center justify-between px-4 pt-3 pb-2 text-left"
+                    onClick={() => setExpandedProxyId(isExpanded ? null : proxy.id)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`shrink-0 inline-flex items-center justify-center rounded p-0.5 transition-all duration-200 ${isExpanded ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
+                      </span>
+                      <span className="font-medium truncate">{proxy.name}</span>
+                    </div>
+                    <StatusBadge status={proxy.status} />
+                  </button>
+
+                  {/* Info row */}
+                  <div className="px-4 pb-2 flex items-center justify-between text-sm gap-2">
+                    <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                      <span className="text-base shrink-0">{getFlagEmoji(proxy.country)}</span>
+                      <span className="truncate">{proxy.countryName}{proxy.city ? ` · ${proxy.city}` : ""}</span>
+                      <span className="text-muted-foreground/40 shrink-0">·</span>
+                      <span className="font-mono shrink-0">{proxy.externalPort}</span>
+                    </div>
+                    {proxy.publicIp && (
+                      <span className="font-mono text-xs text-muted-foreground shrink-0">{proxy.publicIp}</span>
+                    )}
+                  </div>
+
+                  {/* Actions row */}
+                  <div className="flex items-center gap-0 px-2 pb-2 border-t pt-2 overflow-x-auto">
+                    {proxy.status !== "running" && proxy.status !== "starting" && (
+                      <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleAction(startProxy, proxy.id, proxy.name)} disabled={startProxy.isPending}>
+                        <Play className="h-4 w-4 text-green-500" />
+                      </Button>
+                    )}
+                    {proxy.status === "running" && (
+                      <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleAction(stopProxy, proxy.id, proxy.name)} disabled={stopProxy.isPending}>
+                        <Square className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleAction(restartProxy, proxy.id, proxy.name)} disabled={restartProxy.isPending}>
+                      <RotateCw className="h-4 w-4 text-blue-500" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setActiveProxy(proxy); setShowConnString(true); }}>
+                      <Key className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setActiveProxy(proxy); setShowChangeCountry(true); }}>
+                      <Globe className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className={`h-9 w-9 shrink-0 ${proxy.rotationInterval > 0 ? "text-amber-500" : ""}`} onClick={() => { setActiveProxy(proxy); setShowRotation(true); }}>
+                      <Timer className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setActiveProxy(proxy); setShowChangeCredentials(true); }}>
+                      <UserCog className="h-4 w-4 text-violet-500" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className={`h-9 w-9 shrink-0 ${proxy.allowedIps && proxy.allowedIps.length > 0 ? "text-emerald-500" : ""}`} onClick={() => { setActiveProxy(proxy); setShowIpWhitelist(true); }}>
+                      <ShieldCheck className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setActiveProxy(proxy); setShowLogs(true); }}>
+                      <TerminalSquare className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 ml-auto" onClick={() => handleDelete(proxy.id, proxy.name)} disabled={deleteProxy.isPending}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="border-t px-4 py-3 bg-muted/30" style={{ animation: "row-expand 0.18s ease-out both" }}>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_outgoing_ip")}</p>
+                          <p className="font-mono font-medium">{proxy.publicIp || "—"}</p>
                         </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{proxy.externalPort}</TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{proxy.publicIp || "—"}</TableCell>
-                      <TableCell><StatusBadge status={proxy.status} /></TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {format(new Date(proxy.createdAt), "MMM d, HH:mm")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {proxy.status !== "running" && proxy.status !== "starting" && (
-                            <Button variant="ghost" size="icon" onClick={() => handleAction(startProxy, proxy.id, proxy.name)} disabled={startProxy.isPending} title={t("dash_action_start")}>
-                              <Play className="h-4 w-4 text-green-500" />
-                            </Button>
-                          )}
-                          {proxy.status === "running" && (
-                            <Button variant="ghost" size="icon" onClick={() => handleAction(stopProxy, proxy.id, proxy.name)} disabled={stopProxy.isPending} title={t("dash_action_stop")}>
-                              <Square className="h-4 w-4 text-gray-500" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" onClick={() => handleAction(restartProxy, proxy.id, proxy.name)} disabled={restartProxy.isPending} title={t("dash_action_restart")}>
-                            <RotateCw className="h-4 w-4 text-blue-500" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCountry(true); }} title={t("dash_action_country")}>
-                            <Globe className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => { setActiveProxy(proxy); setShowRotation(true); }}
-                            title={t("rotation_action")}
-                            className={proxy.rotationInterval > 0 ? "text-amber-500 hover:text-amber-600" : ""}
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_auth")}</p>
+                          <p>{proxy.hasSocks5Creds ? t("dash_expand_auth_creds") : proxy.allowedIps && proxy.allowedIps.length > 0 ? t("dash_expand_auth_whitelist") : t("dash_expand_auth_open")}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_rotation")}</p>
+                          <p className="flex items-center gap-1.5">
+                            {proxy.rotationInterval > 0 ? (
+                              <>
+                                {proxy.rotationMode === "random" ? <Shuffle className="h-3.5 w-3.5 text-amber-500" /> : <Timer className="h-3.5 w-3.5 text-amber-500" />}
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {proxy.rotationInterval >= 60 ? `${proxy.rotationInterval / 60}h` : `${proxy.rotationInterval}m`}
+                                  {proxy.rotationMode === "random" ? ` · ${t("dash_expand_rotation_random")}` : ` · ${t("dash_expand_rotation_fixed")}`}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">{t("dash_expand_rotation_off")}</span>
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_created")}</p>
+                          <p className="text-muted-foreground">{format(new Date(proxy.createdAt), "d MMM, HH:mm")}</p>
+                        </div>
+                        {proxy.rotationNextAt && proxy.rotationInterval > 0 && (
+                          <div className="col-span-2">
+                            <p className="text-xs text-muted-foreground mb-1">{t("dash_expand_next_rotation")}</p>
+                            <RotationCountdown nextAt={proxy.rotationNextAt} />
+                            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{format(new Date(proxy.rotationNextAt), "d MMM, HH:mm:ss")}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Desktop table (≥ md) ── */}
+          <div className="hidden md:block border rounded-md overflow-hidden bg-card shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>{t("dash_col_name")}</TableHead>
+                  <TableHead>{t("dash_col_location")}</TableHead>
+                  <TableHead>{t("dash_col_port")}</TableHead>
+                  <TableHead>{t("dash_col_ip")}</TableHead>
+                  <TableHead>{t("dash_col_status")}</TableHead>
+                  <TableHead>{t("dash_col_created")}</TableHead>
+                  <TableHead className="text-right">{t("dash_col_actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {proxies?.map((proxy) => {
+                  const isExpanded = expandedProxyId === proxy.id;
+                  return (
+                    <React.Fragment key={proxy.id}>
+                      <TableRow className={isExpanded ? "border-b-0" : ""}>
+                        <TableCell className="font-medium">
+                          <button
+                            className="flex items-center gap-1.5 hover:text-primary transition-colors group"
+                            onClick={() => setExpandedProxyId(isExpanded ? null : proxy.id)}
                           >
-                            <Timer className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowConnString(true); }} title={t("dash_action_conn")}>
-                            <Key className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCredentials(true); }} title="Сменить учётные данные">
-                            <UserCog className="h-4 w-4 text-violet-500" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowIpWhitelist(true); }} title="IP-вайтлист" className={proxy.allowedIps && proxy.allowedIps.length > 0 ? "text-emerald-500 hover:text-emerald-600" : ""}>
-                            <ShieldCheck className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowLogs(true); }} title={t("dash_action_logs")}>
-                            <TerminalSquare className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(proxy.id, proxy.name)} disabled={deleteProxy.isPending} title={t("dash_action_delete")}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {isExpanded && (
-                      <TableRow className="bg-muted/30 hover:bg-muted/30" style={{ animation: "row-expand 0.18s ease-out both" }}>
-                        <TableCell colSpan={7} className="py-3 px-6">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_outgoing_ip")}</p>
-                              <p className="font-mono font-medium">{proxy.publicIp || "—"}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_location")}</p>
-                              <p className="flex items-center gap-1.5">
-                                <span className="text-base">{getFlagEmoji(proxy.country)}</span>
-                                <span>{proxy.countryName}{proxy.city ? `, ${proxy.city}` : ""}</span>
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_socks5_port")}</p>
-                              <p className="font-mono font-medium">{proxy.externalPort}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_rotation")}</p>
-                              <p className="flex items-center gap-1.5">
-                                {proxy.rotationInterval > 0 ? (
-                                  <>
-                                    {proxy.rotationMode === "random" ? <Shuffle className="h-3.5 w-3.5 text-amber-500" /> : <Timer className="h-3.5 w-3.5 text-amber-500" />}
-                                    <span className="text-amber-600 dark:text-amber-400">
-                                      {proxy.rotationInterval >= 60
-                                        ? `${proxy.rotationInterval / 60}h`
-                                        : `${proxy.rotationInterval}m`}
-                                      {proxy.rotationMode === "random" ? ` · ${t("dash_expand_rotation_random")}` : ` · ${t("dash_expand_rotation_fixed")}`}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span className="text-muted-foreground">{t("dash_expand_rotation_off")}</span>
-                                )}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_auth")}</p>
-                              <p>{proxy.hasSocks5Creds ? t("dash_expand_auth_creds") : proxy.allowedIps && proxy.allowedIps.length > 0 ? t("dash_expand_auth_whitelist") : t("dash_expand_auth_open")}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_created")}</p>
-                              <p className="text-muted-foreground">{format(new Date(proxy.createdAt), "d MMM yyyy, HH:mm")}</p>
-                            </div>
-                            {proxy.lastCountryChangeAt && (
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_last_country")}</p>
-                                <p className="text-muted-foreground">{format(new Date(proxy.lastCountryChangeAt), "d MMM yyyy, HH:mm")}</p>
-                              </div>
+                            <span className={`inline-flex items-center justify-center rounded p-0.5 transition-all duration-200 ${isExpanded ? "bg-primary/15 text-primary rotate-0" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"}`}>
+                              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
+                            </span>
+                            {proxy.name}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg" title={proxy.country}>{getFlagEmoji(proxy.country)}</span>
+                            <span>{proxy.countryName}{proxy.city ? ` (${proxy.city})` : ''}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-muted-foreground">{proxy.externalPort}</TableCell>
+                        <TableCell className="font-mono text-muted-foreground">{proxy.publicIp || "—"}</TableCell>
+                        <TableCell><StatusBadge status={proxy.status} /></TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {format(new Date(proxy.createdAt), "MMM d, HH:mm")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {proxy.status !== "running" && proxy.status !== "starting" && (
+                              <Button variant="ghost" size="icon" onClick={() => handleAction(startProxy, proxy.id, proxy.name)} disabled={startProxy.isPending} title={t("dash_action_start")}>
+                                <Play className="h-4 w-4 text-green-500" />
+                              </Button>
                             )}
-                            {proxy.rotationNextAt && proxy.rotationInterval > 0 && (
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">{t("dash_expand_next_rotation")}</p>
-                                <RotationCountdown nextAt={proxy.rotationNextAt} />
-                                <p className="text-[11px] text-muted-foreground/70 mt-0.5">{format(new Date(proxy.rotationNextAt), "d MMM, HH:mm:ss")}</p>
-                              </div>
+                            {proxy.status === "running" && (
+                              <Button variant="ghost" size="icon" onClick={() => handleAction(stopProxy, proxy.id, proxy.name)} disabled={stopProxy.isPending} title={t("dash_action_stop")}>
+                                <Square className="h-4 w-4 text-gray-500" />
+                              </Button>
                             )}
+                            <Button variant="ghost" size="icon" onClick={() => handleAction(restartProxy, proxy.id, proxy.name)} disabled={restartProxy.isPending} title={t("dash_action_restart")}>
+                              <RotateCw className="h-4 w-4 text-blue-500" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCountry(true); }} title={t("dash_action_country")}>
+                              <Globe className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { setActiveProxy(proxy); setShowRotation(true); }}
+                              title={t("rotation_action")}
+                              className={proxy.rotationInterval > 0 ? "text-amber-500 hover:text-amber-600" : ""}
+                            >
+                              <Timer className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowConnString(true); }} title={t("dash_action_conn")}>
+                              <Key className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowChangeCredentials(true); }} title="Сменить учётные данные">
+                              <UserCog className="h-4 w-4 text-violet-500" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowIpWhitelist(true); }} title="IP-вайтлист" className={proxy.allowedIps && proxy.allowedIps.length > 0 ? "text-emerald-500 hover:text-emerald-600" : ""}>
+                              <ShieldCheck className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setActiveProxy(proxy); setShowLogs(true); }} title={t("dash_action_logs")}>
+                              <TerminalSquare className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(proxy.id, proxy.name)} disabled={deleteProxy.isPending} title={t("dash_action_delete")}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                      {isExpanded && (
+                        <TableRow className="bg-muted/30 hover:bg-muted/30" style={{ animation: "row-expand 0.18s ease-out both" }}>
+                          <TableCell colSpan={7} className="py-3 px-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_outgoing_ip")}</p>
+                                <p className="font-mono font-medium">{proxy.publicIp || "—"}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_location")}</p>
+                                <p className="flex items-center gap-1.5">
+                                  <span className="text-base">{getFlagEmoji(proxy.country)}</span>
+                                  <span>{proxy.countryName}{proxy.city ? `, ${proxy.city}` : ""}</span>
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_socks5_port")}</p>
+                                <p className="font-mono font-medium">{proxy.externalPort}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_rotation")}</p>
+                                <p className="flex items-center gap-1.5">
+                                  {proxy.rotationInterval > 0 ? (
+                                    <>
+                                      {proxy.rotationMode === "random" ? <Shuffle className="h-3.5 w-3.5 text-amber-500" /> : <Timer className="h-3.5 w-3.5 text-amber-500" />}
+                                      <span className="text-amber-600 dark:text-amber-400">
+                                        {proxy.rotationInterval >= 60
+                                          ? `${proxy.rotationInterval / 60}h`
+                                          : `${proxy.rotationInterval}m`}
+                                        {proxy.rotationMode === "random" ? ` · ${t("dash_expand_rotation_random")}` : ` · ${t("dash_expand_rotation_fixed")}`}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">{t("dash_expand_rotation_off")}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_auth")}</p>
+                                <p>{proxy.hasSocks5Creds ? t("dash_expand_auth_creds") : proxy.allowedIps && proxy.allowedIps.length > 0 ? t("dash_expand_auth_whitelist") : t("dash_expand_auth_open")}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-0.5">{t("dash_col_created")}</p>
+                                <p className="text-muted-foreground">{format(new Date(proxy.createdAt), "d MMM yyyy, HH:mm")}</p>
+                              </div>
+                              {proxy.lastCountryChangeAt && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-0.5">{t("dash_expand_last_country")}</p>
+                                  <p className="text-muted-foreground">{format(new Date(proxy.lastCountryChangeAt), "d MMM yyyy, HH:mm")}</p>
+                                </div>
+                              )}
+                              {proxy.rotationNextAt && proxy.rotationInterval > 0 && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">{t("dash_expand_next_rotation")}</p>
+                                  <RotationCountdown nextAt={proxy.rotationNextAt} />
+                                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">{format(new Date(proxy.rotationNextAt), "d MMM, HH:mm:ss")}</p>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {activeProxy && (
