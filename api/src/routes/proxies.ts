@@ -25,6 +25,7 @@ function formatProxy(p: typeof shProxiesTable.$inferSelect) {
     containerId: p.containerId ?? null,
     publicIp: p.publicIp ?? null,
     allowedIps: allowedIps,
+    hasSocks5Creds: !!(p.socks5UserEncrypted && p.socks5PassEncrypted),
     rotationInterval: p.rotationInterval ?? 0,
     rotationNextAt: p.rotationNextAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
@@ -192,11 +193,15 @@ router.get("/proxies/:id/connection", authenticate, async (req, res): Promise<vo
     and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
   );
   if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
-  const nordUser = decrypt(proxy.nordUserEncrypted);
-  const nordPass = decrypt(proxy.nordPassEncrypted);
   const ip = proxy.publicIp ?? "0.0.0.0";
   const port = proxy.externalPort;
-  res.json({ proxyString: `socks5://${nordUser}:${nordPass}@${ip}:${port}`, ip, port, nordUser, nordPass });
+  if (proxy.socks5UserEncrypted && proxy.socks5PassEncrypted) {
+    const socks5User = decrypt(proxy.socks5UserEncrypted);
+    const socks5Pass = decrypt(proxy.socks5PassEncrypted);
+    res.json({ proxyString: `socks5://${socks5User}:${socks5Pass}@${ip}:${port}`, ip, port, socks5User, socks5Pass, authMode: "credentials" });
+  } else {
+    res.json({ proxyString: `socks5://${ip}:${port}`, ip, port, authMode: "ip-whitelist" });
+  }
 });
 
 router.get("/proxies/:id/logs", authenticate, async (req, res): Promise<void> => {
@@ -221,10 +226,13 @@ router.patch("/proxies/:id/country", authenticate, async (req, res): Promise<voi
   if (proxy.containerId) await stopAndRemoveContainer(proxy.containerId).catch(() => {});
   const nordUser = decrypt(proxy.nordUserEncrypted);
   const nordPass = decrypt(proxy.nordPassEncrypted);
+  const socks5User = proxy.socks5UserEncrypted ? decrypt(proxy.socks5UserEncrypted) : null;
+  const socks5Pass = proxy.socks5PassEncrypted ? decrypt(proxy.socks5PassEncrypted) : null;
+  const allowedIps = proxy.allowedIps ? proxy.allowedIps.split(",").map(s => s.trim()).filter(Boolean) : null;
   try {
     const containerId = await createAndStartContainer({
-      name: `${req.user!.userId}_${proxy.id}`, nordUser, nordPass,
-      country: country.toLowerCase(), city: city ?? null, externalPort: proxy.externalPort,
+      name: `${req.user!.userId}_${proxy.id}`, nordUser, nordPass, socks5User, socks5Pass,
+      country: country.toLowerCase(), city: city ?? null, externalPort: proxy.externalPort, allowedIps,
     });
     const [updated] = await db.update(shProxiesTable)
       .set({ country: country.toLowerCase(), countryName: countryInfo.name, city: city ?? null, containerId, status: "starting", lastCountryChangeAt: new Date(), updatedAt: new Date() })
@@ -237,46 +245,41 @@ router.patch("/proxies/:id/country", authenticate, async (req, res): Promise<voi
   }
 });
 
-router.patch("/proxies/:id/credentials", authenticate, async (req, res): Promise<void> => {
+router.patch("/proxies/:id/socks5-credentials", authenticate, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
-  const { nordUser, nordPass } = req.body as { nordUser: string; nordPass: string };
-  if (!nordUser || !nordPass) {
-    res.status(400).json({ error: "Validation error", message: "nordUser and nordPass are required" });
-    return;
-  }
+  const { socks5User, socks5Pass } = req.body as { socks5User: string | null; socks5Pass: string | null };
   const [proxy] = await db.select().from(shProxiesTable).where(
     and(eq(shProxiesTable.id, id), eq(shProxiesTable.userId, req.user!.userId))
   );
   if (!proxy) { res.status(404).json({ error: "Not Found" }); return; }
 
-  const nordUserEncrypted = encrypt(nordUser);
-  const nordPassEncrypted = encrypt(nordPass);
+  const nordUser = decrypt(proxy.nordUserEncrypted);
+  const nordPass = decrypt(proxy.nordPassEncrypted);
+  const allowedIps = proxy.allowedIps ? proxy.allowedIps.split(",").map(s => s.trim()).filter(Boolean) : null;
+
+  const hasCreds = !!(socks5User && socks5Pass);
+  const socks5UserEncrypted = hasCreds ? encrypt(socks5User!) : null;
+  const socks5PassEncrypted = hasCreds ? encrypt(socks5Pass!) : null;
 
   if (proxy.containerId) await stopAndRemoveContainer(proxy.containerId).catch(() => {});
-
-  const allowedIps = proxy.allowedIps
-    ? proxy.allowedIps.split(",").map(s => s.trim()).filter(Boolean)
-    : null;
 
   try {
     const containerId = await createAndStartContainer({
       name: `${req.user!.userId}_${proxy.id}`,
       nordUser, nordPass,
+      socks5User: hasCreds ? socks5User! : null,
+      socks5Pass: hasCreds ? socks5Pass! : null,
       country: proxy.country, city: proxy.city ?? null,
-      externalPort: proxy.externalPort,
-      allowedIps,
+      externalPort: proxy.externalPort, allowedIps,
     });
     const [updated] = await db.update(shProxiesTable)
-      .set({ nordUserEncrypted, nordPassEncrypted, containerId, status: "starting", updatedAt: new Date() })
+      .set({ socks5UserEncrypted, socks5PassEncrypted, containerId, status: "starting", updatedAt: new Date() })
       .where(eq(shProxiesTable.id, id))
       .returning();
     res.json(formatProxy(updated));
   } catch (err) {
-    req.log.error({ err }, "Failed to restart container after credential change");
-    await db.update(shProxiesTable)
-      .set({ nordUserEncrypted, nordPassEncrypted, status: "error", containerId: null, updatedAt: new Date() })
-      .where(eq(shProxiesTable.id, id));
-    res.status(500).json({ error: "Credentials saved but container restart failed" });
+    req.log.error({ err }, "Failed to restart container after socks5 credential change");
+    res.status(500).json({ error: "Failed to restart container" });
   }
 });
 
