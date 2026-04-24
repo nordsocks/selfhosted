@@ -84,11 +84,18 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
 
   if (config.city) env.push(`NORDVPN_CITY=${config.city}`);
 
-  // Write credentials to a host file and bind-mount it as /run/secrets/TINY_CREDS.
-  // This is the only reliable way the edgd1er/nordvpn-proxy image reads SOCKS5 auth:
-  // its dante/run script calls getTinyCred() which reads /run/secrets/TINY_CREDS.
+  // Pass SOCKS5 credentials via environment variables (primary method for edgd1er/nordvpn-proxy).
+  // Also write a host-mounted secrets file as fallback for images that read /run/secrets/TINY_CREDS.
   const binds: string[] = [];
   if (config.socks5User && config.socks5Pass) {
+    // Env var approach — works with microsocks/dante based images
+    env.push(`SOCKS5_USER=${config.socks5User}`);
+    env.push(`SOCKS5_PASS=${config.socks5Pass}`);
+    env.push(`SOCKS_USER=${config.socks5User}`);
+    env.push(`SOCKS_PASS=${config.socks5Pass}`);
+    env.push(`PROXY_USER=${config.socks5User}`);
+    env.push(`PROXY_PASS=${config.socks5Pass}`);
+    // File approach — fallback for images that read /run/secrets/TINY_CREDS
     const credsFile = writeCredsFile(config.externalPort, config.socks5User, config.socks5Pass);
     binds.push(`${credsFile}:/run/secrets/TINY_CREDS:ro`);
   } else {
