@@ -14,6 +14,7 @@ import { Dashboard } from "@/pages/dashboard";
 import { CreateProxy } from "@/pages/create-proxy";
 import { Account } from "@/pages/account";
 import { InstallGuide } from "@/pages/install-guide";
+import { Support } from "@/pages/support";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Layout } from "@/components/layout";
 
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/terms" component={Terms} />
       <Route path="/install" component={InstallGuide} />
+      <Route path="/support" component={Support} />
 
       <Route path="/" component={Home} />
 
