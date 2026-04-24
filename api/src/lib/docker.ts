@@ -37,6 +37,21 @@ function removeCredsFile(port: number): void {
   try { fs.unlinkSync(filePath); } catch { /* ignore */ }
 }
 
+// PAM config that makes Dante actually validate credentials via pam_unix (shadow file)
+const PAM_CONFIG = `auth    required    pam_unix.so shadow\naccount required    pam_unix.so\n`;
+
+function writePamConfig(port: number): string {
+  ensureCredsDir();
+  const filePath = path.join(CREDS_DIR, `${port}_pam`);
+  fs.writeFileSync(filePath, PAM_CONFIG, { mode: 0o644 });
+  return filePath;
+}
+
+function removePamConfig(port: number): void {
+  const filePath = path.join(CREDS_DIR, `${port}_pam`);
+  try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+}
+
 export interface ContainerConfig {
   name: string;
   nordUser: string;
@@ -95,11 +110,16 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
     env.push(`SOCKS_PASS=${config.socks5Pass}`);
     env.push(`PROXY_USER=${config.socks5User}`);
     env.push(`PROXY_PASS=${config.socks5Pass}`);
-    // File approach — fallback for images that read /run/secrets/TINY_CREDS
+    // Mount TINY_CREDS so image startup script creates the system user + sets password
     const credsFile = writeCredsFile(config.externalPort, config.socks5User, config.socks5Pass);
     binds.push(`${credsFile}:/run/secrets/TINY_CREDS:ro`);
+    // Mount PAM config so Dante actually validates credentials via pam_unix (shadow file).
+    // Without /etc/pam.d/sockd the image has no PAM config → any credentials are accepted.
+    const pamFile = writePamConfig(config.externalPort);
+    binds.push(`${pamFile}:/etc/pam.d/sockd:ro`);
   } else {
     removeCredsFile(config.externalPort);
+    removePamConfig(config.externalPort);
   }
 
   const container = await d.createContainer({
