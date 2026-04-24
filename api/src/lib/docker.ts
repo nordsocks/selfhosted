@@ -1,6 +1,8 @@
 import Docker from "dockerode";
 import { exec } from "child_process";
 import { promisify } from "util";
+import fs from "fs";
+import path from "path";
 import { logger } from "./logger";
 
 const execAsync = promisify(exec);
@@ -16,6 +18,24 @@ function getDocker(): Docker {
 
 export const NORDVPN_IMAGE = "edgd1er/nordvpn-proxy:latest";
 export const SOCKS5_INTERNAL_PORT = 1080;
+
+const CREDS_DIR = "/var/nordsocks-creds";
+
+function ensureCredsDir(): void {
+  if (!fs.existsSync(CREDS_DIR)) fs.mkdirSync(CREDS_DIR, { recursive: true, mode: 0o700 });
+}
+
+function writeCredsFile(port: number, user: string, pass: string): string {
+  ensureCredsDir();
+  const filePath = path.join(CREDS_DIR, `${port}`);
+  fs.writeFileSync(filePath, `${user}\n${pass}`, { mode: 0o600 });
+  return filePath;
+}
+
+function removeCredsFile(port: number): void {
+  const filePath = path.join(CREDS_DIR, `${port}`);
+  try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+}
 
 export interface ContainerConfig {
   name: string;
@@ -63,9 +83,16 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
   ];
 
   if (config.city) env.push(`NORDVPN_CITY=${config.city}`);
+
+  // Write credentials to a host file and bind-mount it as /run/secrets/TINY_CREDS.
+  // This is the only reliable way the edgd1er/nordvpn-proxy image reads SOCKS5 auth:
+  // its dante/run script calls getTinyCred() which reads /run/secrets/TINY_CREDS.
+  const binds: string[] = [];
   if (config.socks5User && config.socks5Pass) {
-    env.push(`SOCKS5_USER=${config.socks5User}`);
-    env.push(`SOCKS5_PASS=${config.socks5Pass}`);
+    const credsFile = writeCredsFile(config.externalPort, config.socks5User, config.socks5Pass);
+    binds.push(`${credsFile}:/run/secrets/TINY_CREDS:ro`);
+  } else {
+    removeCredsFile(config.externalPort);
   }
 
   const container = await d.createContainer({
@@ -76,6 +103,7 @@ export async function createAndStartContainer(config: ContainerConfig): Promise<
       PortBindings: {
         [`${SOCKS5_INTERNAL_PORT}/tcp`]: [{ HostIp: "0.0.0.0", HostPort: String(config.externalPort) }],
       },
+      Binds: binds.length > 0 ? binds : undefined,
       RestartPolicy: { Name: "unless-stopped" },
       CapAdd: ["NET_ADMIN"],
       Devices: [{ PathOnHost: "/dev/net/tun", PathInContainer: "/dev/net/tun", CgroupPermissions: "rwm" }],
