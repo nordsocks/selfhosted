@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Server, LogOut, LayoutDashboard, PlusCircle, UserCircle, Sun, Moon } from "lucide-react";
+import { Server, LogOut, LayoutDashboard, PlusCircle, UserCircle, Sun, Moon, Heart } from "lucide-react";
 import { useLang } from "@/lib/use-lang";
 import { LangSelector } from "@/components/lang-selector";
 import { useTheme } from "@/lib/theme";
@@ -53,7 +53,7 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
             </nav>
           )}
 
-          {/* Right side: theme toggle + lang + logout */}
+          {/* Right side: theme toggle + lang + support + logout */}
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             <button
               onClick={toggleTheme}
@@ -63,6 +63,14 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <LangSelector variant="nav" />
+            <Link href="/support">
+              <button
+                title={t("support_nav")}
+                className="p-1.5 rounded-md text-rose-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+              >
+                <Heart className="h-4 w-4" />
+              </button>
+            </Link>
             {user ? (
               <button
                 onClick={() => logout()}
@@ -110,6 +118,12 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
             <Link href="/terms">
               <span className="underline underline-offset-2 hover:text-foreground transition-colors cursor-pointer">
                 {t("land_footer_terms")}
+              </span>
+            </Link>
+            <Link href="/support">
+              <span className="flex items-center gap-1 text-rose-400 hover:text-rose-500 transition-colors cursor-pointer">
+                <Heart className="h-3 w-3" />
+                {t("support_nav")}
               </span>
             </Link>
           </div>
