@@ -112,6 +112,15 @@ export function Layout({ children, noPadding = false }: LayoutProps) {
             <span className="font-semibold text-foreground">NordSOCKS</span>
             <span>·</span>
             <span>{t("land_footer_desc")}</span>
+            <span>·</span>
+            <a
+              href="https://nordsocks.pro"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline underline-offset-2 transition-colors"
+            >
+              nordsocks.pro
+            </a>
           </div>
           <div className="flex items-center gap-4">
             <span>© {new Date().getFullYear()} NordSOCKS. {t("land_footer_rights")}</span>
